@@ -1,13 +1,20 @@
 const express = require("express");
 const sequelize = require("./config/database");
-const userRoutes = require("./routes/userRoutes");
+const clienteRoutes = require("./routes/clienteRoutes");
+const testRoutes = require("./routes/testRoutes");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use("/api", userRoutes);
+app.use("/api", clienteRoutes);
+app.use("/api", testRoutes); // Añadir esta línea
+
+// Ruta para la URL raíz
+app.get("/", (req, res) => {
+  res.send("Welcome to the API! fff");
+});
 
 sequelize
   .sync()
