@@ -2,6 +2,7 @@ const express = require("express");
 const {
   getAllClientes,
   createCliente,
+  updateCliente,
 } = require("../controllers/clienteController");
 
 const router = express.Router();
@@ -16,5 +17,8 @@ router.get("/clientes", getAllClientes);
 
 // Ruta para crear un nuevo cliente
 router.post("/clientes", createCliente);
+
+// Ruta para actualizar un cliente existente
+router.put("/clientes/:id", updateCliente);
 
 module.exports = router;

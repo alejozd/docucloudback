@@ -20,4 +20,24 @@ exports.createCliente = async (req, res) => {
   }
 };
 
+// Actualizar un cliente existente
+exports.updateCliente = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const [updated] = await Cliente.update(req.body, {
+      where: { idcliente: id },
+    });
+    if (updated) {
+      const updatedCliente = await Cliente.findOne({
+        where: { idcliente: id },
+      });
+      res.status(200).json(updatedCliente);
+    } else {
+      throw new Error("Cliente not found");
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = { getAllClientes };
