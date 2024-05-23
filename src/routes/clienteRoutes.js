@@ -1,5 +1,8 @@
 const express = require("express");
-const { getAllClientes } = require("../controllers/clienteController");
+const {
+  getAllClientes,
+  createCliente,
+} = require("../controllers/clienteController");
 
 const router = express.Router();
 
@@ -8,6 +11,10 @@ router.get("/", (req, res) => {
   res.send("Welcome to the API!");
 });
 
+// Ruta para obtener todos los clientes
 router.get("/clientes", getAllClientes);
+
+// Ruta para crear un nuevo cliente
+router.post("/clientes", createCliente);
 
 module.exports = router;
