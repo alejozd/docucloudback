@@ -1,7 +1,7 @@
 const Cliente = require("../models/Cliente");
 
 // Obtener todos los clientes
-exports.getAllClientes = async (req, res) => {
+const getAllClientes = async (req, res) => {
   try {
     const clientes = await Cliente.findAll();
     res.json(clientes);
@@ -11,7 +11,7 @@ exports.getAllClientes = async (req, res) => {
 };
 
 // Crear un nuevo cliente
-exports.createCliente = async (req, res) => {
+const createCliente = async (req, res) => {
   try {
     const cliente = await Cliente.create(req.body);
     res.status(201).json(cliente);
@@ -21,7 +21,7 @@ exports.createCliente = async (req, res) => {
 };
 
 // Actualizar un cliente existente
-exports.updateCliente = async (req, res) => {
+const updateCliente = async (req, res) => {
   try {
     const id = req.params.id;
     const [updated] = await Cliente.update(req.body, {
@@ -40,4 +40,4 @@ exports.updateCliente = async (req, res) => {
   }
 };
 
-module.exports = { getAllClientes };
+module.exports = { getAllClientes, createCliente, updateCliente };
