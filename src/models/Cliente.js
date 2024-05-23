@@ -4,7 +4,7 @@ const sequelize = require("../config/database");
 // Modelo de ejemplo para la tabla de usuarios.
 
 const Cliente = sequelize.define(
-  "Clientes",
+  "clientes",
   {
     idcliente: {
       type: DataTypes.INTEGER,

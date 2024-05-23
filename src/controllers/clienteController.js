@@ -13,9 +13,11 @@ const getAllClientes = async (req, res) => {
 // Crear un nuevo cliente
 const createCliente = async (req, res) => {
   try {
+    console.log("Request body:", req.body); // Log the request body to see what data is being sent
     const cliente = await Cliente.create(req.body);
     res.status(201).json(cliente);
   } catch (error) {
+    console.error("Error creating cliente:", error); // Log the error details
     res.status(500).json({ error: error.message });
   }
 };
