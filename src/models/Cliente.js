@@ -34,27 +34,27 @@ const Cliente = sequelize.define(
     },
     contacto1: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     telefonoc1: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     emailc1: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     contacto2: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     telefonoc2: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     emailc2: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
   },
   {
