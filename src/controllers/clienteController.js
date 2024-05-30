@@ -29,13 +29,14 @@ const updateCliente = async (req, res) => {
     const [updated] = await Cliente.update(req.body, {
       where: { idcliente: id },
     });
-    if (updated) {
+    if (updated !== 0) {
       const updatedCliente = await Cliente.findOne({
         where: { idcliente: id },
       });
       res.status(200).json(updatedCliente);
     } else {
-      throw new Error("Cliente not found");
+      // throw new Error("Cliente not found");
+      res.status(200).json({ message: "No hubo cambios en el Cliente" });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
