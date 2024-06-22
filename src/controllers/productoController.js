@@ -27,13 +27,13 @@ const updateProducto = async (req, res) => {
     const [updated] = await Producto.update(req.body, {
       where: { idproducto: id },
     });
-    if (updated) {
+    if (updated !== 0) {
       const updatedProducto = await Producto.findOne({
         where: { idproducto: id },
       });
       res.status(200).json(updatedProducto);
     } else {
-      res.status(404).json({ error: "Producto no encontrado" });
+      res.status(200).json({ message: "No hubo cambios en el producto" });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

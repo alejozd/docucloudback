@@ -5,6 +5,7 @@ const sequelize = require("./config/database");
 const clienteRoutes = require("./routes/clienteRoutes");
 const productoRoutes = require("./routes/productoRoutes");
 const testRoutes = require("./routes/testRoutes");
+const phraseRoutes = require("./routes/phraseRoutes");
 require("dotenv").config();
 
 const app = express();
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use("/api", clienteRoutes);
 app.use("/api", productoRoutes);
 app.use("/api", testRoutes);
+app.use("/api", phraseRoutes);
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
