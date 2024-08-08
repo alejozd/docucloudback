@@ -32,30 +32,6 @@ const Cliente = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    contacto1: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    telefonoc1: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    emailc1: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    contacto2: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    telefonoc2: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    emailc2: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
   },
   {
     tableName: "clientes", // Asegúrate de que el nombre de la tabla sea correcto
