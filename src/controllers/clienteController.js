@@ -3,7 +3,9 @@ const Cliente = require("../models/Cliente");
 // Obtener todos los clientes
 const getAllClientes = async (req, res) => {
   try {
+    console.log("Request body:", req.body);
     const clientes = await Cliente.findAll();
+    console.log("Response body clientes:", clientes);
     res.json(clientes);
   } catch (error) {
     res.status(500).json({ error: error.message });
