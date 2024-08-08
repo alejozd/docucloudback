@@ -4,40 +4,40 @@ const AsociarClienteContacto = require("./AsociarClienteContacto");
 
 // Modelo de ejemplo para la tabla de usuarios.
 
-const Cliente = sequelize.define(
-  "clientes",
+const Contacto = sequelize.define(
+  "contactos",
   {
-    idcliente: {
+    idcontacto: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },
-    nombres: {
+    nombresca: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    identidad: {
+    identidadca: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
     },
-    direccion: {
+    direccionca: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    telefono: {
+    telefonoca: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    email: {
+    emailca: {
       type: DataTypes.STRING,
       allowNull: false,
     },
   },
   {
-    tableName: "clientes", // Asegúrate de que el nombre de la tabla sea correcto
+    tableName: "contactos", // Asegúrate de que el nombre de la tabla sea correcto
     timestamps: false, // Desactiva las marcas de tiempo si no están en tu tabla
   }
 );
 
-module.exports = Cliente;
+module.exports = Contacto;
