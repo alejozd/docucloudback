@@ -1,4 +1,6 @@
 const AsociarClienteContacto = require("../models/AsociarClienteContacto");
+const Cliente = require("../models/Cliente");
+const Contacto = require("../models/Contacto");
 
 // Obtener todas las asociaciones
 const getAllAsociaciones = async (req, res) => {
@@ -37,4 +39,33 @@ const deleteAsociacion = async (req, res) => {
   }
 };
 
-module.exports = { getAllAsociaciones, createAsociacion, deleteAsociacion };
+// Obtener contactos asociados a un cliente
+const getContactosByCliente = async (req, res) => {
+  try {
+    const clienteId = req.params.clienteId;
+    const cliente = await Cliente.findByPk(clienteId, {
+      include: {
+        model: Contacto,
+        through: {
+          attributes: [], // No incluir atributos de la tabla intermedia
+        },
+      },
+    });
+
+    if (!cliente) {
+      return res.status(404).json({ message: "Cliente no encontrado" });
+    }
+
+    res.json(cliente.Contactos); // Retornar solo los contactos
+  } catch (error) {
+    console.error("Error al obtener contactos:", error);
+    res.status(500).json({ message: "Error al obtener contactos" });
+  }
+};
+
+module.exports = {
+  getAllAsociaciones,
+  createAsociacion,
+  deleteAsociacion,
+  getContactosByCliente,
+};
