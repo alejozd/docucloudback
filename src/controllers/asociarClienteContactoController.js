@@ -43,6 +43,8 @@ const deleteAsociacion = async (req, res) => {
 const getContactosByCliente = async (req, res) => {
   try {
     const clienteId = req.params.clienteId;
+    // console.log("Cliente ID recibido:", clienteId);
+
     const cliente = await Cliente.findByPk(clienteId, {
       include: {
         model: Contacto,
@@ -53,10 +55,13 @@ const getContactosByCliente = async (req, res) => {
     });
 
     if (!cliente) {
-      return res.status(404).json({ message: "Cliente no encontrado" });
+      return res.status(404).json({ message: "Cliente no encontrado." });
     }
 
-    res.json(cliente.Contactos); // Retornar solo los contactos
+    const contactosAsociados = await cliente.getContactos();
+    // console.log("Contactos asociados:", contactosAsociados);
+
+    res.json(contactosAsociados); // Retornar solo los contactos
   } catch (error) {
     console.error("Error al obtener contactos:", error);
     res.status(500).json({ message: "Error al obtener contactos" });
