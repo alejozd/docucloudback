@@ -4,6 +4,7 @@ const {
   createAsociacion,
   deleteAsociacion,
   getContactosByCliente,
+  asociarContactos,
 } = require("../controllers/asociarClienteContactoController");
 
 const router = express.Router();
@@ -19,5 +20,8 @@ router.delete("/asociaciones/:id", deleteAsociacion);
 
 // Obtener contactos asociados a un cliente
 router.get("/clientes/:clienteId/contactos", getContactosByCliente);
+
+// Asociar contactos a un cliente
+router.post("/clientes/:clienteId/asociar-contactos", asociarContactos);
 
 module.exports = router;

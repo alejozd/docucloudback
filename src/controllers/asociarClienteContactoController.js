@@ -68,9 +68,36 @@ const getContactosByCliente = async (req, res) => {
   }
 };
 
+// Asociar contactos a un cliente
+const asociarContactos = async (req, res) => {
+  try {
+    console.log("clienteId:", req.params.clienteId);
+    console.log("contactos:", req.body);
+    const clienteId = req.params.clienteId;
+    const { contactos } = req.body;
+
+    // Limpiar asociaciones actuales
+    await AsociarClienteContacto.destroy({ where: { idcliente: clienteId } });
+
+    // Crear nuevas asociaciones
+    const asociaciones = contactos.map((idcontacto) => ({
+      idcliente: clienteId,
+      idcontacto,
+    }));
+
+    await AsociarClienteContacto.bulkCreate(asociaciones);
+
+    res.status(201).json({ message: "Asociaciones guardadas correctamente." });
+  } catch (error) {
+    console.error("Error al guardar asociaciones:", error);
+    res.status(500).json({ message: "Error al guardar asociaciones." });
+  }
+};
+
 module.exports = {
   getAllAsociaciones,
   createAsociacion,
   deleteAsociacion,
   getContactosByCliente,
+  asociarContactos,
 };
