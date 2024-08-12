@@ -1,14 +1,35 @@
 const Contacto = require("../models/Contacto");
+const Segmento = require("../models/Segmento");
 
 // Obtener todos los contactos
 const getAllContactos = async (req, res) => {
   try {
     console.log("Request body:", req.body);
-    const contactos = await Contacto.findAll();
-    console.log("Response body contactos:", contactos);
-    res.json(contactos);
+    const contactos = await Contacto.findAll({
+      include: [
+        { model: Segmento, attributes: ["idsegmento", "nombresegmento"] },
+      ],
+    });
+
+    // Mapea los contactos para que solo incluya el nombresegmento junto con el idsegmento
+    const contactosConSegmento = contactos.map((contacto) => {
+      const contactoJson = contacto.toJSON();
+      if (contactoJson.segmento) {
+        contactoJson.nombresegmento = contactoJson.segmento.nombresegmento;
+        contactoJson.idsegmento = contactoJson.segmento.idsegmento;
+      } else {
+        contactoJson.nombresegmento = null;
+        contactoJson.idsegmento = null;
+      }
+      delete contactoJson.segmento; // Elimina el objeto segmento ya que ahora tienes idsegmento y nombresegmento
+      return contactoJson;
+    });
+
+    console.log("Response body contactosConSegmento:", contactosConSegmento);
+    res.json(contactosConSegmento);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error al obtener los contactos:", error);
+    res.status(500).json({ message: "Error al obtener los contactos." });
   }
 };
 

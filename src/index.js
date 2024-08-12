@@ -8,6 +8,7 @@ const asociarClienteContactoRoutes = require("./routes/asociarClienteContactoRou
 const productoRoutes = require("./routes/productoRoutes");
 const testRoutes = require("./routes/testRoutes");
 const phraseRoutes = require("./routes/phraseRoutes");
+const segmentoRoutes = require("./routes/segmentoRoutes");
 require("dotenv").config();
 // Importar asociaciones
 require("./associations");
@@ -27,6 +28,7 @@ app.use("/api", asociarClienteContactoRoutes);
 app.use("/api", productoRoutes);
 app.use("/api", testRoutes);
 app.use("/api", phraseRoutes);
+app.use("/api", segmentoRoutes);
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
