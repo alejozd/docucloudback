@@ -33,6 +33,22 @@ const Cliente = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    regimen: {
+      type: DataTypes.SMALLINT,
+      allowNull: true,
+    },
+    area_ica: {
+      type: DataTypes.SMALLINT,
+      allowNull: true,
+    },
+    regimen_fel: {
+      type: DataTypes.SMALLINT,
+      allowNull: true,
+    },
+    responsabilidad_fel: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     tableName: "clientes", // Asegúrate de que el nombre de la tabla sea correcto
