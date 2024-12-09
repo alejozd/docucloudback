@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
-
-const SECRET_KEY = process.env.JWT_SECRET || "tu_clave_secreta";
+// Utiliza la clave secreta desde las variables de entorno
+const SECRET_KEY = process.env.JWT_SECRET;
 
 const authenticateToken = (req, res, next) => {
   //   console.log("Token recibido en el servidor: ", req.headers["authorization"]);
