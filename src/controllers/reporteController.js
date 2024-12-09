@@ -18,7 +18,7 @@ function generateMD5(input) {
 // Procesar el serial
 function processSerial(serial) {
   const decodedString = decodeFromBase64(serial);
-
+  //   console.log("serial: ", serial);
   // Verificar y dividir la cadena
   const separator = "*-+";
   const separatorPos = decodedString.indexOf(separator);
@@ -84,7 +84,7 @@ exports.generateReportKey = (req, res) => {
 
     const result = processSerial(serial);
 
-    return res.json(result);
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }

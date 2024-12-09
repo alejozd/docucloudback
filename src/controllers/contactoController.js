@@ -4,7 +4,7 @@ const Segmento = require("../models/Segmento");
 // Obtener todos los contactos
 const getAllContactos = async (req, res) => {
   try {
-    console.log("Request body:", req.body);
+    // console.log("Request body:", req.body);
     const contactos = await Contacto.findAll({
       include: [
         { model: Segmento, attributes: ["idsegmento", "nombresegmento"] },
@@ -25,7 +25,7 @@ const getAllContactos = async (req, res) => {
       return contactoJson;
     });
 
-    console.log("Response body contactosConSegmento:", contactosConSegmento);
+    // console.log("Response body contactosConSegmento:", contactosConSegmento);
     res.json(contactosConSegmento);
   } catch (error) {
     console.error("Error al obtener los contactos:", error);
@@ -36,7 +36,7 @@ const getAllContactos = async (req, res) => {
 // Crear un nuevo contacto
 const createContacto = async (req, res) => {
   try {
-    console.log("Request body:", req.body); // Log the request body to see what data is being sent
+    // console.log("Request body:", req.body); // Log the request body to see what data is being sent
     const contacto = await Contacto.create(req.body);
     res.status(201).json(contacto);
   } catch (error) {

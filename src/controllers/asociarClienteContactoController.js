@@ -71,8 +71,8 @@ const getContactosByCliente = async (req, res) => {
 // Asociar contactos a un cliente
 const asociarContactos = async (req, res) => {
   try {
-    console.log("clienteId:", req.params.clienteId);
-    console.log("contactos:", req.body);
+    // console.log("clienteId:", req.params.clienteId);
+    // console.log("contactos:", req.body);
     const clienteId = req.params.clienteId;
     const { contactos } = req.body;
 

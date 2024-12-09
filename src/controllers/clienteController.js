@@ -3,9 +3,9 @@ const Cliente = require("../models/Cliente");
 // Obtener todos los clientes
 const getAllClientes = async (req, res) => {
   try {
-    console.log("Request body:", req.body);
+    // console.log("Request body:", req.body);
     const clientes = await Cliente.findAll();
-    console.log("Response body clientes:", clientes);
+    // console.log("Response body clientes:", clientes);
     res.json(clientes);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -15,7 +15,7 @@ const getAllClientes = async (req, res) => {
 // Crear un nuevo cliente
 const createCliente = async (req, res) => {
   try {
-    console.log("Request body:", req.body); // Log the request body to see what data is being sent
+    // console.log("Request body:", req.body); // Log the request body to see what data is being sent
     const cliente = await Cliente.create(req.body);
     res.status(201).json(cliente);
   } catch (error) {
