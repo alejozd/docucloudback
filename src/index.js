@@ -45,15 +45,6 @@ app.get("/", (req, res) => {
   res.send("Welcome to the API! fff");
 });
 
-// sequelize
-//   .sync()
-//   .then(() => {
-//     app.listen(PORT, () => {
-//       console.log(`Server is running on port ${PORT}`);
-//     });
-//   })
-//   .catch((error) => console.error("Unable to connect to the database:", error));
-
 // Sincronizar la base de datos según el entorno
 if (NODE_ENV === "development") {
   sequelize
