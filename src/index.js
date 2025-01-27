@@ -18,6 +18,7 @@ require("./associations");
 
 const app = express();
 const PORT = process.env.PORT || 3100;
+const NODE_ENV = process.env.NODE_ENV || "development"; // Tomar el valor de NODE_ENV o asignar "development" como predeterminado
 
 // Configurar CORS
 app.use(cors());
@@ -44,11 +45,38 @@ app.get("/", (req, res) => {
   res.send("Welcome to the API! fff");
 });
 
-sequelize
-  .sync()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  })
-  .catch((error) => console.error("Unable to connect to the database:", error));
+// sequelize
+//   .sync()
+//   .then(() => {
+//     app.listen(PORT, () => {
+//       console.log(`Server is running on port ${PORT}`);
+//     });
+//   })
+//   .catch((error) => console.error("Unable to connect to the database:", error));
+
+// Sincronizar la base de datos según el entorno
+if (NODE_ENV === "development") {
+  sequelize
+    .sync({ alter: true }) // Usa alter para ajustar las tablas según los modelos sin perder datos
+    .then(() => {
+      console.log("Database synced in development mode");
+      app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
+      });
+    })
+    .catch((error) =>
+      console.error("Unable to connect to the database:", error)
+    );
+} else {
+  sequelize
+    .authenticate() // Solo verificar conexión en producción, sin modificar tablas
+    .then(() => {
+      console.log("Database connected successfully");
+      app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
+      });
+    })
+    .catch((error) =>
+      console.error("Unable to connect to the database:", error)
+    );
+}
