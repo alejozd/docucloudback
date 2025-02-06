@@ -1,77 +1,70 @@
 const { exec } = require("child_process");
 
 const getBatteryStatus = (req, res) => {
-  // Ejecutar comando para obtener el nivel de batería
+  let batteryInfo = {};
+
+  // Obtener nivel de batería
   exec("cat /sys/class/power_supply/BAT0/capacity", (errorCap, stdoutCap) => {
-    if (errorCap) {
-      return res
-        .status(500)
-        .json({ error: "No se pudo obtener el nivel de batería" });
+    if (!errorCap) {
+      batteryInfo.batteryLevel = `${stdoutCap.trim()}%`;
+    } else {
+      batteryInfo.batteryLevel = "No disponible";
     }
 
-    // Ejecutar comando para obtener el estado de carga
+    // Obtener estado de carga
     exec(
       "cat /sys/class/power_supply/BAT0/status",
       (errorStatus, stdoutStatus) => {
-        if (errorStatus) {
-          return res
-            .status(500)
-            .json({ error: "No se pudo obtener el estado de carga" });
+        if (!errorStatus) {
+          batteryInfo.chargingStatus = stdoutStatus.trim();
+        } else {
+          batteryInfo.chargingStatus = "No disponible";
         }
 
-        // // Obtener la energía actual de la batería
-        // exec(
-        //   "cat /sys/class/power_supply/BAT0/energy_now",
-        //   (errorEnergyNow, stdoutEnergyNow) => {
-        //     if (errorEnergyNow) {
-        //       return res
-        //         .status(500)
-        //         .json({ error: "No se pudo obtener la energía actual" });
-        //     }
+        // Obtener energía actual
+        exec(
+          "cat /sys/class/power_supply/BAT0/energy_now",
+          (errorEnergyNow, stdoutEnergyNow) => {
+            if (!errorEnergyNow) {
+              batteryInfo.energyNow = `${
+                parseInt(stdoutEnergyNow.trim(), 10) / 1_000_000
+              } Wh`;
+            } else {
+              batteryInfo.energyNow = "No disponible";
+            }
 
-        //     // Obtener la energía máxima de la batería
-        //     exec(
-        //       "cat /sys/class/power_supply/BAT0/energy_full",
-        //       (errorEnergyFull, stdoutEnergyFull) => {
-        //         if (errorEnergyFull) {
-        //           return res
-        //             .status(500)
-        //             .json({ error: "No se pudo obtener la energía máxima" });
-        //         }
+            // Obtener energía máxima
+            exec(
+              "cat /sys/class/power_supply/BAT0/energy_full",
+              (errorEnergyFull, stdoutEnergyFull) => {
+                if (!errorEnergyFull) {
+                  batteryInfo.energyFull = `${
+                    parseInt(stdoutEnergyFull.trim(), 10) / 1_000_000
+                  } Wh`;
+                } else {
+                  batteryInfo.energyFull = "No disponible";
+                }
 
-        //         // Obtener la potencia actual (si se está cargando o descargando)
-        //         exec(
-        //           "cat /sys/class/power_supply/BAT0/power_now",
-        //           (errorPower, stdoutPower) => {
-        //             if (errorPower) {
-        //               return res
-        //                 .status(500)
-        //                 .json({ error: "No se pudo obtener la potencia" });
-        //             }
+                // Obtener potencia de carga/descarga
+                exec(
+                  "cat /sys/class/power_supply/BAT0/power_now",
+                  (errorPower, stdoutPower) => {
+                    if (!errorPower) {
+                      batteryInfo.powerNow = `${
+                        parseInt(stdoutPower.trim(), 10) / 1_000_000
+                      } W`;
+                    } else {
+                      batteryInfo.powerNow = "No disponible";
+                    }
 
-        //             res.json({
-        //               batteryLevel: `${stdoutCap.trim()}%`,
-        //               chargingStatus: stdoutStatus.trim(), // "Charging", "Discharging", "Full"
-        //               energyNow: `${
-        //                 parseInt(stdoutEnergyNow.trim(), 10) / 1_000_000
-        //               } Wh`, // Convertido a Wh
-        //               energyFull: `${
-        //                 parseInt(stdoutEnergyFull.trim(), 10) / 1_000_000
-        //               } Wh`, // Convertido a Wh
-        //               powerNow: `${
-        //                 parseInt(stdoutPower.trim(), 10) / 1_000_000
-        //               } W`, // Convertido a W
-        //             });
-        //           }
-        //         );
-        //       }
-        //     );
-        //   }
-        // );
-        res.json({
-          batteryLevel: `${stdoutCap.trim()}%`,
-          chargingStatus: stdoutStatus.trim(), // "Charging", "Discharging", "Full"
-        });
+                    // Enviar la respuesta con los datos obtenidos
+                    res.json(batteryInfo);
+                  }
+                );
+              }
+            );
+          }
+        );
       }
     );
   });
