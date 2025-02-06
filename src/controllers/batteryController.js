@@ -1,35 +1,40 @@
 const { exec } = require("child_process");
 
 const getBatteryStatus = (req, res) => {
-  let batteryInfo = {};
+  let batteryInfo = {
+    batteryLevel: "No disponible",
+    chargingStatus: "No disponible",
+    energyFull: "No disponible",
+    energyNow: "No disponible",
+    powerNow: "No disponible",
+    estimatedTime: "No disponible",
+  };
 
-  // Obtener nivel de batería
+  // Obtener nivel de batería y estado de carga
   exec("cat /sys/class/power_supply/BAT0/capacity", (errorCap, stdoutCap) => {
-    batteryInfo.batteryLevel = errorCap
-      ? "No disponible"
-      : `${stdoutCap.trim()}%`;
+    if (!errorCap) batteryInfo.batteryLevel = `${stdoutCap.trim()}%`;
 
-    // Obtener estado de carga
     exec(
       "cat /sys/class/power_supply/BAT0/status",
       (errorStatus, stdoutStatus) => {
-        batteryInfo.chargingStatus = errorStatus
-          ? "No disponible"
-          : stdoutStatus.trim();
+        if (!errorStatus) batteryInfo.chargingStatus = stdoutStatus.trim();
 
         // Obtener más información con upower
         exec(
-          "upower -i $(upower -e | grep BAT) | grep -E 'energy|power|time to'",
+          "upower -i $(upower -e | grep BAT)",
           (errorUpower, stdoutUpower) => {
             if (!errorUpower) {
               const lines = stdoutUpower.split("\n").map((line) => line.trim());
 
               lines.forEach((line) => {
-                if (line.includes("energy-full:")) {
+                if (line.startsWith("energy-full:")) {
                   batteryInfo.energyFull = line.split(":")[1].trim();
-                } else if (line.includes("energy-now:")) {
+                } else if (line.startsWith("energy-now:")) {
                   batteryInfo.energyNow = line.split(":")[1].trim();
-                } else if (line.includes("power:")) {
+                } else if (
+                  line.startsWith("power:") ||
+                  line.startsWith("power now:")
+                ) {
                   batteryInfo.powerNow = line.split(":")[1].trim();
                 } else if (
                   line.includes("time to full") ||
@@ -38,14 +43,8 @@ const getBatteryStatus = (req, res) => {
                   batteryInfo.estimatedTime = line.split(":")[1].trim();
                 }
               });
-            } else {
-              batteryInfo.energyFull = "No disponible";
-              batteryInfo.energyNow = "No disponible";
-              batteryInfo.powerNow = "No disponible";
-              batteryInfo.estimatedTime = "No disponible";
             }
 
-            // Enviar la respuesta con los datos obtenidos
             res.json(batteryInfo);
           }
         );
