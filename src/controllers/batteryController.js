@@ -29,12 +29,9 @@ const getBatteryStatus = (req, res) => {
               lines.forEach((line) => {
                 if (line.startsWith("energy-full:")) {
                   batteryInfo.energyFull = line.split(":")[1].trim();
-                } else if (line.startsWith("energy-now:")) {
-                  batteryInfo.energyNow = line.split(":")[1].trim();
-                } else if (
-                  line.startsWith("power:") ||
-                  line.startsWith("power now:")
-                ) {
+                } else if (line.startsWith("energy:")) {
+                  batteryInfo.energyNow = line.split(":")[1].trim(); // Usar "energy" en lugar de "energy-now"
+                } else if (line.startsWith("energy-rate:")) {
                   batteryInfo.powerNow = line.split(":")[1].trim();
                 } else if (
                   line.includes("time to full") ||
