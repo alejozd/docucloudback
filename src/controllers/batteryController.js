@@ -5,64 +5,48 @@ const getBatteryStatus = (req, res) => {
 
   // Obtener nivel de batería
   exec("cat /sys/class/power_supply/BAT0/capacity", (errorCap, stdoutCap) => {
-    if (!errorCap) {
-      batteryInfo.batteryLevel = `${stdoutCap.trim()}%`;
-    } else {
-      batteryInfo.batteryLevel = "No disponible";
-    }
+    batteryInfo.batteryLevel = errorCap
+      ? "No disponible"
+      : `${stdoutCap.trim()}%`;
 
     // Obtener estado de carga
     exec(
       "cat /sys/class/power_supply/BAT0/status",
       (errorStatus, stdoutStatus) => {
-        if (!errorStatus) {
-          batteryInfo.chargingStatus = stdoutStatus.trim();
-        } else {
-          batteryInfo.chargingStatus = "No disponible";
-        }
+        batteryInfo.chargingStatus = errorStatus
+          ? "No disponible"
+          : stdoutStatus.trim();
 
-        // Obtener energía actual
+        // Obtener más información con upower
         exec(
-          "cat /sys/class/power_supply/BAT0/energy_now",
-          (errorEnergyNow, stdoutEnergyNow) => {
-            if (!errorEnergyNow) {
-              batteryInfo.energyNow = `${
-                parseInt(stdoutEnergyNow.trim(), 10) / 1_000_000
-              } Wh`;
+          "upower -i $(upower -e | grep BAT) | grep -E 'energy|power|time to'",
+          (errorUpower, stdoutUpower) => {
+            if (!errorUpower) {
+              const lines = stdoutUpower.split("\n").map((line) => line.trim());
+
+              lines.forEach((line) => {
+                if (line.includes("energy-full:")) {
+                  batteryInfo.energyFull = line.split(":")[1].trim();
+                } else if (line.includes("energy-now:")) {
+                  batteryInfo.energyNow = line.split(":")[1].trim();
+                } else if (line.includes("power:")) {
+                  batteryInfo.powerNow = line.split(":")[1].trim();
+                } else if (
+                  line.includes("time to full") ||
+                  line.includes("time to empty")
+                ) {
+                  batteryInfo.estimatedTime = line.split(":")[1].trim();
+                }
+              });
             } else {
+              batteryInfo.energyFull = "No disponible";
               batteryInfo.energyNow = "No disponible";
+              batteryInfo.powerNow = "No disponible";
+              batteryInfo.estimatedTime = "No disponible";
             }
 
-            // Obtener energía máxima
-            exec(
-              "cat /sys/class/power_supply/BAT0/energy_full",
-              (errorEnergyFull, stdoutEnergyFull) => {
-                if (!errorEnergyFull) {
-                  batteryInfo.energyFull = `${
-                    parseInt(stdoutEnergyFull.trim(), 10) / 1_000_000
-                  } Wh`;
-                } else {
-                  batteryInfo.energyFull = "No disponible";
-                }
-
-                // Obtener potencia de carga/descarga
-                exec(
-                  "cat /sys/class/power_supply/BAT0/power_now",
-                  (errorPower, stdoutPower) => {
-                    if (!errorPower) {
-                      batteryInfo.powerNow = `${
-                        parseInt(stdoutPower.trim(), 10) / 1_000_000
-                      } W`;
-                    } else {
-                      batteryInfo.powerNow = "No disponible";
-                    }
-
-                    // Enviar la respuesta con los datos obtenidos
-                    res.json(batteryInfo);
-                  }
-                );
-              }
-            );
+            // Enviar la respuesta con los datos obtenidos
+            res.json(batteryInfo);
           }
         );
       }
