@@ -42,9 +42,14 @@ const getBatteryStatus = (req, res) => {
 
                 acpiLines.forEach((line) => {
                   if (line.includes("design capacity")) {
-                    batteryInfo.designCapacity = line.split(":")[1].trim();
-                  } else if (line.includes("last full capacity")) {
-                    batteryInfo.lastFullCapacity = line.split(":")[1].trim();
+                    batteryInfo.designCapacity =
+                      line.match(/design capacity (\d+ mAh)/)?.[1] ||
+                      "No disponible";
+                  }
+                  if (line.includes("last full capacity")) {
+                    batteryInfo.lastFullCapacity =
+                      line.match(/last full capacity (\d+ mAh)/)?.[1] ||
+                      "No disponible";
                   }
                 });
               }
