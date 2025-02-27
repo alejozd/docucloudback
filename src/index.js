@@ -14,6 +14,7 @@ const reporteRoutes = require("./routes/reporteRoutes");
 const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
+const claveMediosRoutes = require("./routes/claveMediosRoutes");
 require("dotenv").config();
 // Importar asociaciones
 require("./associations");
@@ -38,6 +39,7 @@ app.use("/api", segmentoRoutes);
 app.use("/api", autorizacionRoutes);
 app.use("/api", registroSolicitudRoutes);
 app.use("/api", batteryRoutes);
+app.use("/api", claveMediosRoutes);
 
 // Ruta de autenticación
 app.use("/api", authRoutes);
