@@ -2,6 +2,45 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const sequelize = require("./config/database");
+require("dotenv").config();
+
+// Importar modelos
+const Cliente = require("./models/Cliente")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const Contacto = require("./models/Contacto")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const AsociarClienteContacto = require("./models/AsociarClienteContacto")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const ClienteMedio = require("./models/ClienteMedio")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const SerialERP = require("./models/SerialERP")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const ClaveGenerada = require("./models/ClaveGenerada")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+
+// Importar asociaciones
+require("./associations")({
+  Cliente,
+  Contacto,
+  AsociarClienteContacto,
+  ClienteMedio,
+  SerialERP,
+  ClaveGenerada,
+});
+
+// Importar rutas
 const clienteRoutes = require("./routes/clienteRoutes");
 const contactoRoutes = require("./routes/contactoRoutes");
 const asociarClienteContactoRoutes = require("./routes/asociarClienteContactoRoutes");
@@ -15,15 +54,13 @@ const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
 const claveMediosRoutes = require("./routes/claveMediosRoutes");
-require("dotenv").config();
-// Importar asociaciones
-require("./associations");
 
+// Configurar Express
 const app = express();
 const PORT = process.env.PORT || 3100;
 const NODE_ENV = process.env.NODE_ENV || "development"; // Tomar el valor de NODE_ENV o asignar "development" como predeterminado
 
-// Configurar CORS
+//Configurar CORS y middlewares
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
@@ -39,7 +76,16 @@ app.use("/api", segmentoRoutes);
 app.use("/api", autorizacionRoutes);
 app.use("/api", registroSolicitudRoutes);
 app.use("/api", batteryRoutes);
-app.use("/api", claveMediosRoutes);
+// app.use("/api", claveMediosRoutes);
+
+// Pasar los modelos inicializados a las rutas
+app.use(
+  "/api",
+  claveMediosRoutes({
+    SerialERP,
+    ClaveGenerada,
+  })
+);
 
 // Ruta de autenticación
 app.use("/api", authRoutes);

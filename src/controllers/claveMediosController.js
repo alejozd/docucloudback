@@ -11,7 +11,9 @@ function generateMD5Hash(input) {
 }
 
 // Controlador para generar la clave desde el serial
-exports.generarClaveDesdeSerial = async (req, res) => {
+exports.generarClaveDesdeSerial = async (req, res, models) => {
+  const { SerialERP, ClaveGenerada } = models;
+
   try {
     const { serial } = req.body;
 
@@ -29,7 +31,7 @@ exports.generarClaveDesdeSerial = async (req, res) => {
         .json({ error: "El serial no es un Base64 válido." });
     }
 
-    // Separar los datos concatenados (asumiendo que están separados por PistaDos)
+    // Separar los datos concatenados
     const pistaDos = "ZS8Q5TKU0"; // Constante definida en tu aplicación
     const partes = decodedData.split(pistaDos);
 
@@ -46,7 +48,22 @@ exports.generarClaveDesdeSerial = async (req, res) => {
 
     // Eliminar el carácter '|' si existe al inicio de la MAC
     if (macServidor.startsWith("|")) {
-      macServidor = macServidor.substring(1); // Eliminar el primer carácter
+      macServidor = macServidor.substring(1);
+    }
+
+    // Verificar si el serial ERP existe y está activo
+    const serialDB = await SerialERP.findOne({
+      where: {
+        serial_erp: serialERP,
+        ano_medios: anoMedios,
+        activo: true,
+      },
+    });
+
+    if (!serialDB) {
+      return res
+        .status(400)
+        .json({ error: "El serial ERP no es válido o no está activo." });
     }
 
     // Concatenar los datos para generar la clave
@@ -54,6 +71,13 @@ exports.generarClaveDesdeSerial = async (req, res) => {
 
     // Generar la clave MD5
     const claveGenerada = generateMD5Hash(datosConcatenados);
+
+    // Guardar la clave generada en la base de datos
+    await ClaveGenerada.create({
+      serial_erp_id: serialDB.id,
+      mac_servidor: macServidor,
+      clave_generada: claveGenerada,
+    });
 
     // Responder con la clave generada
     res.json({
