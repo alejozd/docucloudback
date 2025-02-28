@@ -6,8 +6,8 @@ function decodeBase64(encodedString) {
 }
 
 // Función para generar un hash MD5
-function generateMD5Hash(input) {
-  return crypto.createHash("md5").update(input).digest("hex");
+function generateMD5Hash(data) {
+  return crypto.createHash("md5").update(data).digest("hex").toUpperCase();
 }
 
 // Controlador para generar la clave desde el serial
@@ -67,10 +67,11 @@ exports.generarClaveDesdeSerial = async (req, res, models) => {
     }
 
     // Concatenar los datos para generar la clave
-    const datosConcatenados = `${serialERP}${pistaDos}${anoMedios}${macServidor}`;
+    const datosConcatenados = `${serialERP}${pistaDos}${anoMedios}|${macServidor}`;
 
     // Generar la clave MD5
     const claveGenerada = generateMD5Hash(datosConcatenados);
+    console.log("Clave Generada:", claveGenerada); // Salida en mayúsculas
 
     // Guardar la clave generada en la base de datos
     await ClaveGenerada.create({
