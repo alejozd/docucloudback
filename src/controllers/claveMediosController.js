@@ -8,6 +8,7 @@ function decodeBase64(encodedString) {
 // Función para generar un hash MD5
 function generateMD5Hash(data) {
   return crypto.createHash("md5").update(data).digest("hex").toUpperCase();
+  // return crypto.createHash("md5").update(data).digest("hex");
 }
 
 // Controlador para generar la clave desde el serial
