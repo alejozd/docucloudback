@@ -67,7 +67,7 @@ exports.generarClaveDesdeSerial = async (req, res, models) => {
     }
 
     // Concatenar los datos para generar la clave
-    const datosConcatenados = `${serialERP}${pistaDos}${anoMedios}${macServidor}`;
+    const datosConcatenados = `${serialERP}${pistaDos}${anoMedios}|${macServidor}`;
 
     // Generar la clave MD5
     const claveGenerada = generateMD5Hash(datosConcatenados);
