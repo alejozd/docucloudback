@@ -54,6 +54,9 @@ const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
 const claveMediosRoutes = require("./routes/claveMediosRoutes");
+const clientesMediosRoutes = require("./routes/clientesMediosRoutes");
+const serialesERPRoutes = require("./routes/serialesERPRoutes");
+const clavesMediosGeneradasRoutes = require("./routes/clavesMediosGeneradasRoutes");
 
 // Configurar Express
 const app = express();
@@ -91,6 +94,27 @@ app.use(
 app.use("/api", authRoutes);
 // Ruta protegida
 app.use("/api", reporteRoutes);
+
+app.use(
+  "/api/clientes-medios",
+  clientesMediosRoutes({
+    ClienteMedio,
+  })
+);
+
+app.use(
+  "/api/seriales-erp",
+  serialesERPRoutes({
+    SerialERP,
+  })
+);
+
+app.use(
+  "/api/claves-medios-generadas",
+  clavesMediosGeneradasRoutes({
+    ClaveGenerada,
+  })
+);
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
