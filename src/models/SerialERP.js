@@ -28,8 +28,8 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "seriales_erp", // Nombre de la tabla en la base de datos
       timestamps: true, // Habilita createdAt y updatedAt
-      createdAt: "created_At", // Especifica el nombre de la columna para createdAt
-      updatedAt: "updated_At", // Especifica el nombre de la columna para updatedAt)
+      createdAt: "created_at", // Especifica el nombre de la columna para createdAt
+      updatedAt: "updated_at", // Especifica el nombre de la columna para updatedAt)
     }
   );
 

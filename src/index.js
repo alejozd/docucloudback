@@ -4,6 +4,11 @@ const cors = require("cors");
 const sequelize = require("./config/database");
 require("dotenv").config();
 
+// Importar controladores
+const serialesERPController = require("./controllers/serialesERPController");
+const clientesMediosController = require("./controllers/clientesMediosController");
+const clavesMediosGeneradasController = require("./controllers/clavesMediosGeneradasController");
+
 // Importar modelos
 const Cliente = require("./models/Cliente")(
   sequelize,
@@ -99,6 +104,7 @@ app.use(
   "/api/clientes-medios",
   clientesMediosRoutes({
     ClienteMedio,
+    clientesMediosController,
   })
 );
 
@@ -106,6 +112,8 @@ app.use(
   "/api/seriales-erp",
   serialesERPRoutes({
     SerialERP,
+    ClienteMedio,
+    serialesERPController,
   })
 );
 
@@ -113,6 +121,8 @@ app.use(
   "/api/claves-medios-generadas",
   clavesMediosGeneradasRoutes({
     ClaveGenerada,
+    clavesMediosGeneradasController,
+    SerialERP,
   })
 );
 
@@ -125,6 +135,7 @@ app.get("/", (req, res) => {
 if (NODE_ENV === "development") {
   sequelize
     .sync({ alter: true }) // Usa alter para ajustar las tablas según los modelos sin perder datos
+    // .sync()
     .then(() => {
       console.log("Database synced in development mode");
       app.listen(PORT, () => {

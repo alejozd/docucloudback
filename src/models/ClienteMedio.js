@@ -28,8 +28,8 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "clientes_medios",
       timestamps: true,
-      createdAt: "created_At", // Especifica el nombre de la columna para createdAt
-      updatedAt: "updated_At", // Especifica el nombre de la columna para updatedAt)
+      createdAt: "created_at", // Especifica el nombre de la columna para createdAt
+      updatedAt: "updated_at", // Especifica el nombre de la columna para updatedAt)
     }
   );
 
