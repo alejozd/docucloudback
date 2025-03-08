@@ -3,9 +3,10 @@
 exports.getClientesMedios = async (models) => {
   const { ClienteMedio } = models;
   try {
-    const clientes = await ClienteMedio.findAll({
-      attributes: ["id", "nombre_completo"], // Solo necesitamos el ID y el nombre
-    });
+    // const clientes = await ClienteMedio.findAll({
+    //   attributes: ["id", "nombre_completo"], // Solo necesitamos el ID y el nombre
+    // });
+    const clientes = await ClienteMedio.findAll();
     if (!clientes || clientes.length === 0) {
       throw new Error("No se encontraron clientes medios.");
     }
