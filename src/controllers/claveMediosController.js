@@ -74,11 +74,17 @@ exports.generarClaveDesdeSerial = async (req, res, models) => {
     const claveGenerada = generateMD5Hash(datosConcatenados);
     console.log("Clave Generada:", claveGenerada); // Salida en mayúsculas
 
+    // Capturar la IP del cliente
+    const ipOrigen = req.headers["x-forwarded-for"]
+      ? req.headers["x-forwarded-for"].split(",")[0]
+      : req.socket.remoteAddress;
+
     // Guardar la clave generada en la base de datos
     await ClaveGenerada.create({
       serial_erp_id: serialDB.id,
       mac_servidor: macServidor,
       clave_generada: claveGenerada,
+      iporigen: ipOrigen,
     });
 
     // Responder con la clave generada

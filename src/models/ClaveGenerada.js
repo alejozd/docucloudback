@@ -10,6 +10,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(32),
         allowNull: false,
       },
+      iporigen: {
+        type: DataTypes.STRING(45),
+        allowNull: true, // Permite valores nulos
+      },
       generado_en: {
         type: DataTypes.DATE, // Tipo de dato para fechas
         defaultValue: DataTypes.NOW, // Valor predeterminado: fecha y hora actual
