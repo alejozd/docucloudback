@@ -34,15 +34,31 @@ module.exports = (models) => {
 
   // Crear un nuevo cliente medio (protegido)
   router.post("/", authenticateToken, async (req, res) => {
+    const { nombre_completo, email, telefono, empresa, direccion, activo } =
+      req.body;
     try {
-      const nuevoCliente =
-        await models.clientesMediosController.createClienteMedio(
-          models,
-          req.body
-        );
+      const nuevoCliente = await ClienteMedio.create({
+        nombre_completo,
+        email,
+        telefono,
+        empresa,
+        direccion,
+        activo,
+      });
       res.status(201).json(nuevoCliente);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      console.error("Error al crear el cliente medio:", error.message);
+      if (error.name === "SequelizeValidationError") {
+        // Capturar errores de validación específicos
+        const validationErrors = error.errors.map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+        return res
+          .status(400)
+          .json({ error: "Error de validación", details: validationErrors });
+      }
+      res.status(500).json({ error: "Error interno del servidor." });
     }
   });
 
