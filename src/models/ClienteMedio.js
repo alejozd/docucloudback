@@ -24,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
       },
+      vendedor_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true, // Puede ser nulo
+      },
     },
     {
       tableName: "clientes_medios",
@@ -38,6 +42,12 @@ module.exports = (sequelize, DataTypes) => {
     ClienteMedio.hasMany(models.SerialERP, {
       foreignKey: "cliente_id",
       as: "seriales",
+    });
+
+    // Relación con Vendedor
+    ClienteMedio.belongsTo(models.Vendedor, {
+      foreignKey: "vendedor_id",
+      as: "vendedor",
     });
   };
 

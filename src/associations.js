@@ -8,6 +8,7 @@ module.exports = (models) => {
     ClienteMedio,
     SerialERP,
     ClaveGenerada,
+    Vendedor,
   } = models;
 
   // Asociaciones entre Cliente y Contacto
@@ -42,5 +43,14 @@ module.exports = (models) => {
   ClaveGenerada.belongsTo(SerialERP, {
     foreignKey: "serial_erp_id",
     as: "serial",
+  });
+
+  ClienteMedio.belongsTo(Vendedor, {
+    foreignKey: "vendedor_id",
+    as: "vendedor",
+  });
+  Vendedor.hasMany(ClienteMedio, {
+    foreignKey: "vendedor_id",
+    as: "clientes",
   });
 };
