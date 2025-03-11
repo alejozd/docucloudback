@@ -38,6 +38,11 @@ const Vendedor = require("./models/Vendedor")(
   sequelize,
   sequelize.Sequelize.DataTypes
 );
+const Venta = require("./models/Venta")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const Pago = require("./models/Pago")(sequelize, sequelize.Sequelize.DataTypes);
 
 // Importar asociaciones
 require("./associations")({
@@ -48,6 +53,8 @@ require("./associations")({
   SerialERP,
   ClaveGenerada,
   Vendedor,
+  Venta,
+  Pago,
 });
 
 // Importar rutas
@@ -68,6 +75,7 @@ const clientesMediosRoutes = require("./routes/clientesMediosRoutes");
 const serialesERPRoutes = require("./routes/serialesERPRoutes");
 const clavesMediosGeneradasRoutes = require("./routes/clavesMediosGeneradasRoutes");
 const vendedoresRoutes = require("./routes/vendedoresRoutes");
+const ventaRoutes = require("./routes/ventaRoutes");
 
 // Configurar Express
 const app = express();
@@ -137,6 +145,15 @@ app.use(
   "/api/vendedores",
   vendedoresRoutes({
     Vendedor,
+  })
+);
+
+app.use(
+  "/api/ventas",
+  ventaRoutes({
+    Venta,
+    Vendedor,
+    ClienteMedio,
   })
 );
 
