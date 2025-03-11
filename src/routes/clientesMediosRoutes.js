@@ -1,4 +1,3 @@
-// routes/clientesMediosRoutes.js
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middlewares/authMiddleware");
@@ -9,12 +8,22 @@ module.exports = (models) => {
   // Obtener todos los clientes medios (protegido)
   router.get("/", authenticateToken, async (req, res) => {
     try {
+      // const clientes = await ClienteMedio.findAll({
+      //   include: [
+      //     {
+      //       model: models.Vendedor,
+      //       as: "vendedor", // Incluye el vendedor asociado
+      //       attributes: ["id", "nombre"], // Solo incluye campos relevantes del vendedor
+      //     },
+      //   ],
+      // });
       const clientes = await models.clientesMediosController.getClientesMedios(
         models
       );
       res.json(clientes);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error("Error al obtener los clientes medios:", error.message);
+      res.status(500).json({ error: "Error al obtener los clientes medios." });
     }
   });
 
@@ -22,20 +31,35 @@ module.exports = (models) => {
   router.get("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
-      const cliente = await models.clientesMediosController.getClienteMedioById(
-        models,
-        id
-      );
+      const cliente = await ClienteMedio.findByPk(id, {
+        include: [
+          {
+            model: models.Vendedor,
+            as: "vendedor", // Incluye el vendedor asociado
+            attributes: ["id", "nombre"], // Solo incluye campos relevantes del vendedor
+          },
+        ],
+      });
+      if (!cliente) {
+        return res.status(404).json({ error: "Cliente medio no encontrado." });
+      }
       res.json(cliente);
     } catch (error) {
-      res.status(404).json({ error: error.message });
+      res.status(500).json({ error: "Error al obtener el cliente medio." });
     }
   });
 
   // Crear un nuevo cliente medio (protegido)
   router.post("/", authenticateToken, async (req, res) => {
-    const { nombre_completo, email, telefono, empresa, direccion, activo } =
-      req.body;
+    const {
+      nombre_completo,
+      email,
+      telefono,
+      empresa,
+      direccion,
+      activo,
+      vendedor_id,
+    } = req.body;
     try {
       const nuevoCliente = await ClienteMedio.create({
         nombre_completo,
@@ -44,6 +68,7 @@ module.exports = (models) => {
         empresa,
         direccion,
         activo,
+        vendedor_id, // Agrega el vendedor_id
       });
       res.status(201).json(nuevoCliente);
     } catch (error) {
@@ -65,12 +90,29 @@ module.exports = (models) => {
   // Actualizar un cliente medio (protegido)
   router.put("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
+    const {
+      nombre_completo,
+      email,
+      telefono,
+      empresa,
+      direccion,
+      activo,
+      vendedor_id,
+    } = req.body;
     try {
-      const cliente = await models.clientesMediosController.updateClienteMedio(
-        models,
-        id,
-        req.body
-      );
+      const cliente = await ClienteMedio.findByPk(id);
+      if (!cliente) {
+        return res.status(404).json({ error: "Cliente medio no encontrado." });
+      }
+      await cliente.update({
+        nombre_completo,
+        email,
+        telefono,
+        empresa,
+        direccion,
+        activo,
+        vendedor_id, // Actualiza el vendedor_id
+      });
       res.json(cliente);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -81,13 +123,14 @@ module.exports = (models) => {
   router.delete("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
-      const response = await models.clientesMediosController.deleteClienteMedio(
-        models,
-        id
-      );
-      res.json(response);
+      const cliente = await ClienteMedio.findByPk(id);
+      if (!cliente) {
+        return res.status(404).json({ error: "Cliente medio no encontrado." });
+      }
+      await cliente.destroy();
+      res.json({ message: "Cliente medio eliminado correctamente." });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: "Error al eliminar el cliente medio." });
     }
   });
 

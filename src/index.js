@@ -111,6 +111,7 @@ app.use(
   clientesMediosRoutes({
     ClienteMedio,
     clientesMediosController,
+    Vendedor,
   })
 );
 

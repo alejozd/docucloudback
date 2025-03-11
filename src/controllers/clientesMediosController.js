@@ -1,18 +1,17 @@
-// controllers/clientesMediosController.js
-
 exports.getClientesMedios = async (models) => {
   const { ClienteMedio } = models;
   try {
-    // const clientes = await ClienteMedio.findAll({
-    //   attributes: ["id", "nombre_completo"], // Solo necesitamos el ID y el nombre
-    // });
-    const clientes = await ClienteMedio.findAll();
-    if (!clientes || clientes.length === 0) {
-      throw new Error("No se encontraron clientes medios.");
-    }
+    const clientes = await ClienteMedio.findAll({
+      include: [
+        {
+          model: models.Vendedor,
+          as: "vendedor",
+          attributes: ["id", "nombre"],
+        },
+      ],
+    });
     return clientes;
   } catch (error) {
-    console.error("Error al obtener los clientes medios:", error.message);
     throw new Error("Error al obtener los clientes medios.");
   }
 };
@@ -20,38 +19,52 @@ exports.getClientesMedios = async (models) => {
 exports.getClienteMedioById = async (models, id) => {
   const { ClienteMedio } = models;
   try {
-    const cliente = await ClienteMedio.findByPk(id);
+    const cliente = await ClienteMedio.findByPk(id, {
+      include: [
+        {
+          model: models.Vendedor,
+          as: "vendedor",
+          attributes: ["id", "nombre"],
+        },
+      ],
+    });
     if (!cliente) {
       throw new Error("Cliente medio no encontrado.");
     }
     return cliente;
   } catch (error) {
-    throw error;
+    throw new Error(error.message || "Error al obtener el cliente medio.");
   }
 };
 
-exports.createClienteMedio = async (models, data) => {
+exports.updateClienteMedio = async (models, id, datos) => {
   const { ClienteMedio } = models;
-  try {
-    const nuevoCliente = await ClienteMedio.create(data);
-    return nuevoCliente;
-  } catch (error) {
-    console.error("Error al crear el cliente medio:", error.message);
-    throw new Error("Error al crear el cliente medio.");
-  }
-};
-
-exports.updateClienteMedio = async (models, id, data) => {
-  const { ClienteMedio } = models;
+  const {
+    nombre_completo,
+    email,
+    telefono,
+    empresa,
+    direccion,
+    activo,
+    vendedor_id,
+  } = datos;
   try {
     const cliente = await ClienteMedio.findByPk(id);
     if (!cliente) {
       throw new Error("Cliente medio no encontrado.");
     }
-    await cliente.update(data);
+    await cliente.update({
+      nombre_completo,
+      email,
+      telefono,
+      empresa,
+      direccion,
+      activo,
+      vendedor_id,
+    });
     return cliente;
   } catch (error) {
-    throw error;
+    throw new Error(error.message || "Error al actualizar el cliente medio.");
   }
 };
 
@@ -65,6 +78,6 @@ exports.deleteClienteMedio = async (models, id) => {
     await cliente.destroy();
     return { message: "Cliente medio eliminado correctamente." };
   } catch (error) {
-    throw error;
+    throw new Error(error.message || "Error al eliminar el cliente medio.");
   }
 };
