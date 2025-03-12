@@ -76,6 +76,7 @@ const serialesERPRoutes = require("./routes/serialesERPRoutes");
 const clavesMediosGeneradasRoutes = require("./routes/clavesMediosGeneradasRoutes");
 const vendedoresRoutes = require("./routes/vendedoresRoutes");
 const ventaRoutes = require("./routes/ventaRoutes");
+const pagoRoutes = require("./routes/pagoRoutes");
 
 // Configurar Express
 const app = express();
@@ -154,6 +155,14 @@ app.use(
     Venta,
     Vendedor,
     ClienteMedio,
+  })
+);
+
+app.use(
+  "/api/pagos",
+  pagoRoutes({
+    Pago,
+    Venta,
   })
 );
 
