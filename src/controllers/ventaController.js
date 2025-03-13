@@ -37,6 +37,7 @@ exports.createVenta = async (models, datos) => {
 
 exports.updateVenta = async (models, id, datos) => {
   try {
+    console.log("Datos recibidos:", datos);
     const venta = await models.Venta.findByPk(id);
     if (!venta) {
       throw new Error("Venta no encontrada.");
@@ -44,6 +45,7 @@ exports.updateVenta = async (models, id, datos) => {
     await venta.update(datos);
     return venta;
   } catch (error) {
+    console.error("Error al actualizar la venta:", error.message);
     throw new Error("Error al actualizar la venta.");
   }
 };
