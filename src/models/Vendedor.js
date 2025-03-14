@@ -10,6 +10,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(20),
         allowNull: true, // El teléfono es opcional
       },
+      activo: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true, // Valor predeterminado: true
+      },
     },
     {
       tableName: "vendedores", // Nombre de la tabla en la base de datos
