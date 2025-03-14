@@ -17,7 +17,7 @@ module.exports = (models) => {
 
   // Crear un nuevo vendedor (protegido)
   router.post("/", authenticateToken, async (req, res) => {
-    const { nombre, telefono } = req.body;
+    const { nombre, telefono, activo } = req.body;
     try {
       if (!nombre) {
         return res
@@ -27,6 +27,7 @@ module.exports = (models) => {
       const nuevoVendedor = await Vendedor.create({
         nombre,
         telefono,
+        activo,
       });
       res.status(201).json(nuevoVendedor);
     } catch (error) {
@@ -37,7 +38,7 @@ module.exports = (models) => {
   // Actualizar un vendedor por ID (protegido)
   router.put("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { nombre, telefono } = req.body;
+    const { nombre, telefono, activo } = req.body;
     try {
       const vendedor = await Vendedor.findByPk(id);
       if (!vendedor) {
@@ -46,6 +47,7 @@ module.exports = (models) => {
       await vendedor.update({
         nombre,
         telefono,
+        activo,
       });
       res.json(vendedor);
     } catch (error) {
