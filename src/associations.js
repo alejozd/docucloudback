@@ -75,4 +75,10 @@ module.exports = (models) => {
     foreignKey: "venta_id",
     as: "venta",
   });
+
+  // Asociación entre Vendedor y Venta
+  Vendedor.hasMany(Venta, {
+    foreignKey: "vendedor_id",
+    as: "ventas",
+  });
 };

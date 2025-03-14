@@ -146,6 +146,8 @@ app.use(
   "/api/vendedores",
   vendedoresRoutes({
     Vendedor,
+    Venta,
+    Pago,
   })
 );
 

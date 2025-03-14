@@ -68,5 +68,62 @@ module.exports = (models) => {
     }
   });
 
+  // Obtener el detalle de cartera de un vendedor (protegido)
+  router.get("/:id/cartera", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+      // Obtener todas las ventas del vendedor
+      const ventas = await models.Venta.findAll({
+        where: { vendedor_id: id },
+        attributes: ["id", "valor_total", "fecha_venta"],
+        include: [
+          {
+            model: models.Pago,
+            as: "pagos",
+            attributes: ["monto_pagado", "fecha_pago"],
+          },
+        ],
+      });
+
+      // Procesar los datos para calcular el saldo
+      const cartera = ventas.map((venta) => {
+        const totalPagos = venta.pagos.reduce(
+          (total, pago) => total + parseFloat(pago.monto_pagado),
+          0
+        );
+        return {
+          venta_id: venta.id,
+          fecha_venta: venta.fecha_venta,
+          valor_venta: parseFloat(venta.valor_total),
+          total_pagos: totalPagos,
+          saldo: parseFloat(venta.valor_total) - totalPagos,
+        };
+      });
+
+      // Calcular el saldo total del vendedor
+      const totalVentas = cartera.reduce(
+        (total, item) => total + item.valor_venta,
+        0
+      );
+      const totalPagos = cartera.reduce(
+        (total, item) => total + item.total_pagos,
+        0
+      );
+      const saldoTotal = totalVentas - totalPagos;
+
+      res.json({
+        ventas: cartera,
+        totales: {
+          totalVentas,
+          totalPagos,
+          saldoTotal,
+        },
+      });
+    } catch (error) {
+      console.error("Error al obtener el detalle de cartera:", error.message);
+      res.status(500).json({ error: "Error interno del servidor." });
+    }
+  });
+
   return router;
 };
