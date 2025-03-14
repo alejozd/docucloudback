@@ -96,6 +96,10 @@ module.exports = (models) => {
           fecha_venta: venta.fecha_venta,
           valor_venta: parseFloat(venta.valor_total),
           total_pagos: totalPagos,
+          pagos: venta.pagos.map((pago) => ({
+            monto: parseFloat(pago.monto_pagado),
+            fecha_pago: pago.fecha_pago, // Incluir la fecha del pago
+          })),
           saldo: parseFloat(venta.valor_total) - totalPagos,
         };
       });
