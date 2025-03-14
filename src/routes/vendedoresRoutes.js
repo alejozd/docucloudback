@@ -71,16 +71,18 @@ module.exports = (models) => {
   // Obtener el detalle de cartera de un vendedor (protegido)
   router.get("/:id/cartera", authenticateToken, async (req, res) => {
     const { id } = req.params;
+    const { Venta, Pago } = models;
+
     try {
       // Obtener todas las ventas del vendedor
-      const ventas = await models.Venta.findAll({
+      const ventas = await Venta.findAll({
         where: { vendedor_id: id },
         attributes: ["id", "valor_total", "fecha_venta"],
         include: [
           {
-            model: models.Pago,
+            model: Pago,
             as: "pagos",
-            attributes: ["monto_pagado", "fecha_pago"],
+            attributes: ["id", "monto_pagado", "fecha_pago", "metodo_pago"], // Incluir detalles de los pagos
           },
         ],
       });
@@ -97,8 +99,10 @@ module.exports = (models) => {
           valor_venta: parseFloat(venta.valor_total),
           total_pagos: totalPagos,
           pagos: venta.pagos.map((pago) => ({
-            monto: parseFloat(pago.monto_pagado),
-            fecha_pago: pago.fecha_pago, // Incluir la fecha del pago
+            pago_id: pago.id,
+            monto_pagado: parseFloat(pago.monto_pagado),
+            fecha_pago: pago.fecha_pago,
+            metodo_pago: pago.metodo_pago,
           })),
           saldo: parseFloat(venta.valor_total) - totalPagos,
         };
