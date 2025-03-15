@@ -33,4 +33,44 @@ const getEstadoAutorizacion = async (req, res) => {
   }
 };
 
-module.exports = { getEstadoAutorizacion };
+// Nueva función para incrementar los intentos de envío
+const incrementarIntentosEnvio = async (req, res) => {
+  const { id } = req.params; // Obtener el ID de la URL
+
+  try {
+    const autorizacion = await Autorizacion.findByPk(id);
+
+    if (!autorizacion) {
+      return res
+        .status(404)
+        .json({ error: "No se encontró el registro de autorización" });
+    }
+
+    // Incrementar el contador de intentos
+    autorizacion.intentos_envio += 1;
+
+    // Validar si se excede el límite de envíos en modo demo
+    if (
+      autorizacion.estado === "no_autorizado" &&
+      autorizacion.intentos_envio > 2
+    ) {
+      autorizacion.estado = "bloqueado"; // Cambiar el estado a bloqueado
+    }
+
+    // Guardar los cambios en la base de datos
+    await autorizacion.save();
+
+    // Responder con el estado actualizado y el número de intentos
+    res.json({
+      estado: autorizacion.estado,
+      intentos_envio: autorizacion.intentos_envio,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  getEstadoAutorizacion,
+  incrementarIntentosEnvio, // Exportar la nueva función
+};
