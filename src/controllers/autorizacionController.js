@@ -24,8 +24,10 @@ const getEstadoAutorizacion = async (req, res) => {
       estado: autorizacion.estado,
     });
 
-    // Responder con el estado de autorización
-    res.json({ estado: autorizacion.estado });
+    res.json({
+      estado: autorizacion.estado,
+      intentos_envio: autorizacion.intentos_envio, // Incluir el contador de intentos
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

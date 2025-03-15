@@ -34,6 +34,11 @@ const Autorizacion = sequelize.define(
       defaultValue: DataTypes.NOW,
       onUpdate: DataTypes.NOW,
     },
+    intentos_envio: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
   },
   {
     tableName: "autorizacion",
