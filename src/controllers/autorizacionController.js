@@ -110,8 +110,25 @@ const cambiarEstadoAutorizacion = async (req, res) => {
   }
 };
 
+// Nueva función para obtener el listado de autorizaciones
+const obtenerListadoAutorizaciones = async (req, res) => {
+  try {
+    // Obtener todos los registros de la tabla "autorizacion"
+    const autorizaciones = await Autorizacion.findAll();
+
+    // Responder con el listado de autorizaciones
+    res.json({
+      total_registros: autorizaciones.length,
+      autorizaciones,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getEstadoAutorizacion,
   incrementarIntentosEnvio, // Exportar la nueva función
   cambiarEstadoAutorizacion,
+  obtenerListadoAutorizaciones,
 };

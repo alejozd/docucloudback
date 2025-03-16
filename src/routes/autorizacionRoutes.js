@@ -3,6 +3,7 @@ const {
   getEstadoAutorizacion,
   incrementarIntentosEnvio, // Importar la nueva función
   cambiarEstadoAutorizacion,
+  obtenerListadoAutorizaciones,
 } = require("../controllers/autorizacionController");
 
 const router = express.Router();
@@ -15,5 +16,8 @@ router.post("/autorizacion/incrementar-intentos/:id", incrementarIntentosEnvio);
 
 // Nueva ruta para cambiar el estado de autorización
 router.put("/autorizacion/cambiar-estado/:id", cambiarEstadoAutorizacion);
+
+// Nueva ruta para obtener el listado de autorizaciones
+router.get("/autorizacion/listado", obtenerListadoAutorizaciones);
 
 module.exports = router;
