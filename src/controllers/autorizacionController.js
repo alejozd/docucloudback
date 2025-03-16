@@ -70,7 +70,48 @@ const incrementarIntentosEnvio = async (req, res) => {
   }
 };
 
+// Nueva función para cambiar el estado de autorización
+const cambiarEstadoAutorizacion = async (req, res) => {
+  const { id } = req.params; // Obtener el ID de la URL
+  const { nuevo_estado } = req.body; // Obtener el nuevo estado del cuerpo de la solicitud
+
+  // Validar que el nuevo estado sea uno de los valores permitidos
+  const estadosPermitidos = ["autorizado", "no_autorizado", "bloqueado"];
+  if (!estadosPermitidos.includes(nuevo_estado)) {
+    return res.status(400).json({
+      error:
+        "El estado proporcionado no es válido. Debe ser 'autorizado', 'no_autorizado' o 'bloqueado'.",
+    });
+  }
+
+  try {
+    // Buscar el registro de autorización por ID
+    const autorizacion = await Autorizacion.findByPk(id);
+
+    if (!autorizacion) {
+      return res
+        .status(404)
+        .json({ error: "No se encontró el registro de autorización" });
+    }
+
+    // Actualizar el estado
+    autorizacion.estado = nuevo_estado;
+
+    // Guardar los cambios en la base de datos
+    await autorizacion.save();
+
+    // Responder con el estado actualizado
+    res.json({
+      mensaje: "Estado actualizado correctamente",
+      estado_actual: autorizacion.estado,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getEstadoAutorizacion,
   incrementarIntentosEnvio, // Exportar la nueva función
+  cambiarEstadoAutorizacion,
 };
