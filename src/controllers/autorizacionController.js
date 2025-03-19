@@ -70,10 +70,10 @@ const incrementarIntentosEnvio = async (req, res) => {
   }
 };
 
-// Nueva función para cambiar el estado de autorización
+// Función para cambiar el estado de autorización y opcionalmente los intentos
 const cambiarEstadoAutorizacion = async (req, res) => {
   const { id } = req.params; // Obtener el ID de la URL
-  const { nuevo_estado } = req.body; // Obtener el nuevo estado del cuerpo de la solicitud
+  const { nuevo_estado, nuevos_intentos } = req.body; // Obtener el nuevo estado y los nuevos intentos
 
   // Validar que el nuevo estado sea uno de los valores permitidos
   const estadosPermitidos = ["autorizado", "no_autorizado", "bloqueado"];
@@ -97,13 +97,31 @@ const cambiarEstadoAutorizacion = async (req, res) => {
     // Actualizar el estado
     autorizacion.estado = nuevo_estado;
 
+    // Actualizar los intentos si se proporciona el campo `nuevos_intentos`
+    if (nuevos_intentos !== undefined) {
+      // Validar que los nuevos intentos sean un número entero no negativo
+      if (
+        typeof nuevos_intentos !== "number" ||
+        nuevos_intentos < 0 ||
+        !Number.isInteger(nuevos_intentos)
+      ) {
+        return res.status(400).json({
+          error:
+            "El campo 'nuevos_intentos' debe ser un número entero no negativo.",
+        });
+      }
+
+      autorizacion.intentos_envio = nuevos_intentos;
+    }
+
     // Guardar los cambios en la base de datos
     await autorizacion.save();
 
-    // Responder con el estado actualizado
+    // Responder con el estado e intentos actualizados
     res.json({
-      mensaje: "Estado actualizado correctamente",
+      mensaje: "Estado e intentos actualizados correctamente",
       estado_actual: autorizacion.estado,
+      intentos_envio: autorizacion.intentos_envio,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
