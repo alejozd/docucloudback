@@ -11,6 +11,8 @@ module.exports = (models) => {
     Vendedor,
     Venta,
     Pago,
+    RegistroSolicitud,
+    Autorizacion,
   } = models;
 
   // Asociaciones entre Cliente y Contacto
@@ -80,5 +82,18 @@ module.exports = (models) => {
   Vendedor.hasMany(Venta, {
     foreignKey: "vendedor_id",
     as: "ventas",
+  });
+
+  // Asociación entre RegistroSolicitud y Autorizacion
+  RegistroSolicitud.belongsTo(Autorizacion, {
+    foreignKey: "id_autorizacion", // Clave foránea en RegistroSolicitud
+    targetKey: "idautorizacion", // Clave primaria en Autorizacion
+    as: "autorizacion",
+  });
+
+  Autorizacion.hasMany(RegistroSolicitud, {
+    foreignKey: "id_autorizacion", // Clave foránea en RegistroSolicitud
+    sourceKey: "idautorizacion", // Clave primaria en Autorizacion
+    as: "solicitudes",
   });
 };

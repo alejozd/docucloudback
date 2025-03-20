@@ -43,6 +43,14 @@ const Venta = require("./models/Venta")(
   sequelize.Sequelize.DataTypes
 );
 const Pago = require("./models/Pago")(sequelize, sequelize.Sequelize.DataTypes);
+const RegistroSolicitud = require("./models/RegistroSolicitud")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
+const Autorizacion = require("./models/Autorizacion")(
+  sequelize,
+  sequelize.Sequelize.DataTypes
+);
 
 // Importar asociaciones
 require("./associations")({
@@ -55,6 +63,8 @@ require("./associations")({
   Vendedor,
   Venta,
   Pago,
+  RegistroSolicitud,
+  Autorizacion,
 });
 
 // Importar rutas
@@ -96,8 +106,8 @@ app.use("/api", productoRoutes);
 app.use("/api", testRoutes);
 app.use("/api", phraseRoutes);
 app.use("/api", segmentoRoutes);
-app.use("/api", autorizacionRoutes);
-app.use("/api", registroSolicitudRoutes);
+// app.use("/api", autorizacionRoutes);
+// app.use("/api", registroSolicitudRoutes);
 app.use("/api", batteryRoutes);
 // app.use("/api", claveMediosRoutes);
 
@@ -165,6 +175,22 @@ app.use(
   pagoRoutes({
     Pago,
     Venta,
+  })
+);
+
+app.use(
+  "/api/registro-solicitudes",
+  registroSolicitudRoutes({
+    RegistroSolicitud,
+    Autorizacion,
+  })
+);
+
+app.use(
+  "/api",
+  autorizacionRoutes({
+    Autorizacion,
+    RegistroSolicitud,
   })
 );
 
