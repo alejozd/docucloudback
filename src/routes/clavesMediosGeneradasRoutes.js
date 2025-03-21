@@ -3,7 +3,8 @@ const router = express.Router();
 const { authenticateToken } = require("../middlewares/authMiddleware");
 
 module.exports = (models) => {
-  const { ClaveGenerada, clavesMediosGeneradasController } = models;
+  const { ClaveGenerada, clavesMediosGeneradasController, ClienteMedio } =
+    models;
 
   // Obtener todas las claves generadas (protegido)
   router.get("/", authenticateToken, async (req, res) => {

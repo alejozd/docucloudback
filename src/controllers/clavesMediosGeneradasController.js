@@ -1,7 +1,7 @@
 // controllers/clavesMediosGeneradasController.js
 
 exports.getClavesGeneradas = async (models) => {
-  const { ClaveGenerada, SerialERP } = models;
+  const { ClaveGenerada, SerialERP, ClienteMedio } = models;
   try {
     const claves = await ClaveGenerada.findAll({
       include: [
@@ -9,6 +9,13 @@ exports.getClavesGeneradas = async (models) => {
           model: SerialERP,
           as: "serial", // Alias definido en las asociaciones
           attributes: ["id", "serial_erp"], // Solo necesitamos estos atributos
+          include: [
+            {
+              model: ClienteMedio, // Incluir ClienteMedio dentro de SerialERP
+              as: "cliente", // Alias definido en las asociaciones
+              attributes: ["nombre_completo"], // Solo seleccionar el nombre del cliente
+            },
+          ],
         },
       ],
     });

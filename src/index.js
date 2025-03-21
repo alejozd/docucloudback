@@ -149,6 +149,7 @@ app.use(
     ClaveGenerada,
     clavesMediosGeneradasController,
     SerialERP,
+    ClienteMedio,
   })
 );
 
