@@ -20,6 +20,7 @@ module.exports = ({ Autorizacion, RegistroSolicitud }) => {
         ip_cliente: ipCliente,
         id_autorizacion: id,
         estado: autorizacion.estado,
+        fecha_solicitud: new Date(),
       });
 
       res.json({
