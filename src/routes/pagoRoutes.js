@@ -39,5 +39,22 @@ module.exports = (models) => {
     }
   });
 
+  // Editar un pago existente
+  router.put("/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { monto_pagado, fecha_pago, metodo_pago } = req.body;
+    try {
+      const pago = await models.Pago.findByPk(id);
+      if (!pago) {
+        return res.status(404).json({ error: "Pago no encontrado." });
+      }
+
+      await pago.update({ monto_pagado, fecha_pago, metodo_pago });
+      res.json(pago);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar el pago." });
+    }
+  });
+
   return router;
 };
