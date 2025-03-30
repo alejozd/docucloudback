@@ -1,64 +1,50 @@
-exports.getVentas = async (models) => {
-  try {
-    const ventas = await models.Venta.findAll({
-      include: [
-        {
-          model: models.Vendedor,
-          as: "vendedor",
-          attributes: ["id", "nombre"],
-        },
-        {
-          model: models.ClienteMedio,
-          as: "cliente_medio",
-          attributes: ["id", "nombre_completo"],
-        },
-      ],
-    });
-    return ventas;
-  } catch (error) {
-    throw new Error("Error al obtener las ventas.");
-  }
-};
+const express = require("express");
+const router = express.Router();
+const { authenticateToken } = require("../middlewares/authMiddleware");
+const ventaController = require("../controllers/ventaController");
 
-exports.createVenta = async (models, datos) => {
-  const { vendedor_id, cliente_medio_id, fecha_venta, valor_total } = datos;
-  try {
-    const nuevaVenta = await models.Venta.create({
-      vendedor_id,
-      cliente_medio_id,
-      fecha_venta,
-      valor_total,
-    });
-    return nuevaVenta;
-  } catch (error) {
-    throw new Error("Error al crear la venta.");
-  }
-};
-
-exports.updateVenta = async (models, id, datos) => {
-  try {
-    console.log("Datos recibidos:", datos);
-    const venta = await models.Venta.findByPk(id);
-    if (!venta) {
-      throw new Error("Venta no encontrada.");
+module.exports = (models) => {
+  router.get("/", authenticateToken, async (req, res) => {
+    try {
+      const ventas = await ventaController.getVentas(models);
+      res.json(ventas);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener las ventas." });
     }
-    await venta.update(datos);
-    return venta;
-  } catch (error) {
-    console.error("Error al actualizar la venta:", error.message);
-    throw new Error("Error al actualizar la venta.");
-  }
-};
+  });
 
-exports.deleteVenta = async (models, id) => {
-  try {
-    const venta = await models.Venta.findByPk(id);
-    if (!venta) {
-      throw new Error("Venta no encontrada.");
+  router.post("/", authenticateToken, async (req, res) => {
+    try {
+      const nuevaVenta = await ventaController.createVenta(models, req.body);
+      res.status(201).json(nuevaVenta);
+    } catch (error) {
+      res.status(400).json({ error: "Error al crear la venta." });
     }
-    await venta.destroy();
-    return { message: "Venta eliminada correctamente." };
-  } catch (error) {
-    throw new Error("Error al eliminar la venta.");
-  }
+  });
+
+  router.put("/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const ventaActualizada = await ventaController.updateVenta(
+        models,
+        id,
+        req.body
+      );
+      res.json(ventaActualizada);
+    } catch (error) {
+      res.status(404).json({ error: error.message });
+    }
+  });
+
+  router.delete("/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const resultado = await ventaController.deleteVenta(models, id);
+      res.json(resultado);
+    } catch (error) {
+      res.status(404).json({ error: error.message });
+    }
+  });
+
+  return router;
 };

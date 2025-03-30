@@ -8,15 +8,6 @@ module.exports = (models) => {
   // Obtener todos los clientes medios (protegido)
   router.get("/", authenticateToken, async (req, res) => {
     try {
-      // const clientes = await ClienteMedio.findAll({
-      //   include: [
-      //     {
-      //       model: models.Vendedor,
-      //       as: "vendedor", // Incluye el vendedor asociado
-      //       attributes: ["id", "nombre"], // Solo incluye campos relevantes del vendedor
-      //     },
-      //   ],
-      // });
       const clientes = await models.clientesMediosController.getClientesMedios(
         models
       );

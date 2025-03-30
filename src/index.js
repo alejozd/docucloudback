@@ -1,59 +1,9 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const sequelize = require("./config/database");
 require("dotenv").config();
-
-// Importar controladores
-const serialesERPController = require("./controllers/serialesERPController");
-const clientesMediosController = require("./controllers/clientesMediosController");
-const clavesMediosGeneradasController = require("./controllers/clavesMediosGeneradasController");
-
-// Importar modelos
-const Cliente = require("./models/Cliente")(
+const {
   sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const Contacto = require("./models/Contacto")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const AsociarClienteContacto = require("./models/AsociarClienteContacto")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const ClienteMedio = require("./models/ClienteMedio")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const SerialERP = require("./models/SerialERP")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const ClaveGenerada = require("./models/ClaveGenerada")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const Vendedor = require("./models/Vendedor")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const Venta = require("./models/Venta")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const Pago = require("./models/Pago")(sequelize, sequelize.Sequelize.DataTypes);
-const RegistroSolicitud = require("./models/RegistroSolicitud")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-const Autorizacion = require("./models/Autorizacion")(
-  sequelize,
-  sequelize.Sequelize.DataTypes
-);
-
-// Importar asociaciones
-require("./associations")({
   Cliente,
   Contacto,
   AsociarClienteContacto,
@@ -65,7 +15,12 @@ require("./associations")({
   Pago,
   RegistroSolicitud,
   Autorizacion,
-});
+} = require("./models");
+
+// Importar controladores
+const serialesERPController = require("./controllers/serialesERPController");
+const clientesMediosController = require("./controllers/clientesMediosController");
+const clavesMediosGeneradasController = require("./controllers/clavesMediosGeneradasController");
 
 // Importar rutas
 const clienteRoutes = require("./routes/clienteRoutes");
@@ -91,7 +46,7 @@ const pagoRoutes = require("./routes/pagoRoutes");
 // Configurar Express
 const app = express();
 const PORT = process.env.PORT || 3100;
-const NODE_ENV = process.env.NODE_ENV || "development"; // Tomar el valor de NODE_ENV o asignar "development" como predeterminado
+const NODE_ENV = process.env.NODE_ENV || "development";
 
 //Configurar CORS y middlewares
 app.use(cors());
@@ -106,43 +61,20 @@ app.use("/api", productoRoutes);
 app.use("/api", testRoutes);
 app.use("/api", phraseRoutes);
 app.use("/api", segmentoRoutes);
-// app.use("/api", autorizacionRoutes);
-// app.use("/api", registroSolicitudRoutes);
 app.use("/api", batteryRoutes);
-// app.use("/api", claveMediosRoutes);
 
-// Pasar los modelos inicializados a las rutas
-app.use(
-  "/api",
-  claveMediosRoutes({
-    SerialERP,
-    ClaveGenerada,
-  })
-);
-
-// Ruta de autenticación
+// Pasar modelos a rutas que lo necesitan
+app.use("/api", claveMediosRoutes({ SerialERP, ClaveGenerada }));
 app.use("/api", authRoutes);
-// Ruta protegida
 app.use("/api", reporteRoutes);
-
 app.use(
   "/api/clientes-medios",
-  clientesMediosRoutes({
-    ClienteMedio,
-    clientesMediosController,
-    Vendedor,
-  })
+  clientesMediosRoutes({ ClienteMedio, clientesMediosController, Vendedor })
 );
-
 app.use(
   "/api/seriales-erp",
-  serialesERPRoutes({
-    SerialERP,
-    ClienteMedio,
-    serialesERPController,
-  })
+  serialesERPRoutes({ SerialERP, ClienteMedio, serialesERPController })
 );
-
 app.use(
   "/api/claves-medios-generadas",
   clavesMediosGeneradasRoutes({
@@ -152,59 +84,24 @@ app.use(
     ClienteMedio,
   })
 );
-
-app.use(
-  "/api/vendedores",
-  vendedoresRoutes({
-    Vendedor,
-    Venta,
-    Pago,
-  })
-);
-
-app.use(
-  "/api/ventas",
-  ventaRoutes({
-    Venta,
-    Vendedor,
-    ClienteMedio,
-  })
-);
-
-app.use(
-  "/api/pagos",
-  pagoRoutes({
-    Pago,
-    Venta,
-  })
-);
-
+app.use("/api/vendedores", vendedoresRoutes({ Vendedor, Venta, Pago }));
+app.use("/api/ventas", ventaRoutes({ Venta, Vendedor, ClienteMedio }));
+app.use("/api/pagos", pagoRoutes({ Pago, Venta }));
 app.use(
   "/api/registro-solicitudes",
-  registroSolicitudRoutes({
-    RegistroSolicitud,
-    Autorizacion,
-  })
+  registroSolicitudRoutes({ RegistroSolicitud, Autorizacion })
 );
-
-app.use(
-  "/api",
-  autorizacionRoutes({
-    Autorizacion,
-    RegistroSolicitud,
-  })
-);
+app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
-  res.send("Welcome to the API! fff");
+  res.send("Welcome to the API!");
 });
 
 // Sincronizar la base de datos según el entorno
 if (NODE_ENV === "development") {
   sequelize
-    .sync({ alter: true }) // Usa alter para ajustar las tablas según los modelos sin perder datos
-    // .sync()
+    .sync({ alter: true })
     .then(() => {
       console.log("Database synced in development mode");
       app.listen(PORT, () => {
@@ -216,7 +113,7 @@ if (NODE_ENV === "development") {
     );
 } else {
   sequelize
-    .authenticate() // Solo verificar conexión en producción, sin modificar tablas
+    .authenticate()
     .then(() => {
       console.log("Database connected successfully");
       app.listen(PORT, () => {

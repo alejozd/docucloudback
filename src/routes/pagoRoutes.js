@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middlewares/authMiddleware");
+const pagoController = require("../controllers/pagoController");
+const models = require("../models");
 
 module.exports = (models) => {
   const { Pago } = models;
@@ -25,14 +27,8 @@ module.exports = (models) => {
 
   // Crear un nuevo pago
   router.post("/", authenticateToken, async (req, res) => {
-    const { venta_id, monto_pagado, fecha_pago, metodo_pago } = req.body;
     try {
-      const nuevoPago = await models.Pago.create({
-        venta_id,
-        monto_pagado,
-        fecha_pago,
-        metodo_pago,
-      });
+      const nuevoPago = await pagoController.createPago(models, req.body);
       res.status(201).json(nuevoPago);
     } catch (error) {
       res.status(400).json({ error: "Error al crear el pago." });
@@ -42,22 +38,33 @@ module.exports = (models) => {
   // Editar un pago existente
   router.put("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { venta_id, monto_pagado, fecha_pago, metodo_pago } = req.body;
+    const datos = req.body;
+    try {
+      // Llamamos a la función en el controlador
+      const pagoActualizado = await pagoController.updatePago(
+        models,
+        id,
+        datos
+      );
+      res.json(pagoActualizado);
+    } catch (error) {
+      console.error(
+        "❌ Error en la ruta de actualización de pago:",
+        error.message
+      );
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Eliminar un pago existente
+  router.delete("/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
 
     try {
-      // Buscar el pago por su ID
-      const pago = await models.Pago.findByPk(id);
-      if (!pago) {
-        return res.status(404).json({ error: "Pago no encontrado." });
-      }
-
-      // Actualizar el pago con los datos recibidos
-      await pago.update({ venta_id, monto_pagado, fecha_pago, metodo_pago });
-
-      res.json(pago);
+      const resultado = await pagoController.deletePago(models, id);
+      res.json(resultado);
     } catch (error) {
-      console.error(error);
-      res.status(400).json({ error: "Error al actualizar el pago." });
+      res.status(400).json({ error: error.message });
     }
   });
 

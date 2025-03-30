@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middlewares/authMiddleware");
+const ventaController = require("../controllers/ventaController");
 
 module.exports = (models) => {
   const { Venta } = models;
