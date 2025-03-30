@@ -87,8 +87,17 @@ exports.obtenerDetalleCartera = async (models, id) => {
       ],
     });
 
-    if (!ventas.length)
-      throw new Error("No hay ventas registradas para este vendedor.");
+    // Si no hay ventas, devolver estructura vacía con totales en 0
+    if (!ventas.length) {
+      return {
+        ventas: [],
+        totales: {
+          totalVentas: 0,
+          totalPagos: 0,
+          saldoTotal: 0,
+        },
+      };
+    }
 
     const cartera = ventas.map((venta) => {
       const totalPagos = venta.pagos.reduce(
