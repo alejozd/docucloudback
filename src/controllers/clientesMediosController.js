@@ -37,31 +37,19 @@ exports.getClienteMedioById = async (models, id) => {
   }
 };
 
-exports.updateClienteMedio = async (models, id, datos) => {
-  const { ClienteMedio } = models;
-  const {
-    nombre_completo,
-    email,
-    telefono,
-    empresa,
-    direccion,
-    activo,
-    vendedor_id,
-  } = datos;
+exports.createClienteMedio = async (models, datos) => {
   try {
-    const cliente = await ClienteMedio.findByPk(id);
-    if (!cliente) {
-      throw new Error("Cliente medio no encontrado.");
-    }
-    await cliente.update({
-      nombre_completo,
-      email,
-      telefono,
-      empresa,
-      direccion,
-      activo,
-      vendedor_id,
-    });
+    return await models.ClienteMedio.create(datos);
+  } catch (error) {
+    throw new Error(error.message || "Error al crear el cliente medio.");
+  }
+};
+
+exports.updateClienteMedio = async (models, id, datos) => {
+  try {
+    const cliente = await models.ClienteMedio.findByPk(id);
+    if (!cliente) throw new Error("Cliente medio no encontrado.");
+    await cliente.update(datos);
     return cliente;
   } catch (error) {
     throw new Error(error.message || "Error al actualizar el cliente medio.");
@@ -69,12 +57,9 @@ exports.updateClienteMedio = async (models, id, datos) => {
 };
 
 exports.deleteClienteMedio = async (models, id) => {
-  const { ClienteMedio } = models;
   try {
-    const cliente = await ClienteMedio.findByPk(id);
-    if (!cliente) {
-      throw new Error("Cliente medio no encontrado.");
-    }
+    const cliente = await models.ClienteMedio.findByPk(id);
+    if (!cliente) throw new Error("Cliente medio no encontrado.");
     await cliente.destroy();
     return { message: "Cliente medio eliminado correctamente." };
   } catch (error) {
