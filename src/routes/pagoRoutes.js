@@ -42,33 +42,18 @@ module.exports = (models) => {
   // Editar un pago existente
   router.put("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { monto_pagado, fecha_pago, metodo_pago, venta_id } = req.body;
+    const { venta_id, monto_pagado, fecha_pago, metodo_pago } = req.body;
 
     try {
-      // Buscar el pago existente
+      // Buscar el pago por su ID
       const pago = await models.Pago.findByPk(id);
       if (!pago) {
         return res.status(404).json({ error: "Pago no encontrado." });
       }
 
-      // Actualizar el pago
-      await pago.update({ monto_pagado, fecha_pago, metodo_pago });
+      // Actualizar el pago con los datos recibidos
+      await pago.update({ venta_id, monto_pagado, fecha_pago, metodo_pago });
 
-      // Si se proporciona un `venta_id`, actualizar la venta relacionada
-      if (venta_id) {
-        const venta = await models.Venta.findByPk(venta_id);
-        if (venta) {
-          // Calcular el nuevo total pagado sumando todos los pagos de esa venta
-          const totalPagado = await models.Pago.sum("monto_pagado", {
-            where: { venta_id },
-          });
-
-          // Actualizar el total pagado en la venta
-          await venta.update({ total_pagado: totalPagado });
-        }
-      }
-
-      // Retornar el pago actualizado
       res.json(pago);
     } catch (error) {
       console.error(error);
