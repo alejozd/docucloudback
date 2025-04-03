@@ -172,9 +172,11 @@ exports.obtenerEstadisticas = async (models) => {
           vendedor_id: vendedorId || null, // Asegurar que sea un ID válido
           nombre: nombreVendedor,
           totalVentas: 0,
+          cantidadVentas: 0,
         };
       }
       acc[vendedorId].totalVentas += parseFloat(venta.valor_total) || 0;
+      acc[vendedorId].cantidadVentas += 1;
       return acc;
     }, {});
 
@@ -184,35 +186,49 @@ exports.obtenerEstadisticas = async (models) => {
       include: [
         {
           model: Pago,
-          as: "pagos", // 🔹 Asegúrate de usar el alias correcto para Pago
+          as: "pagos",
           attributes: ["monto_pagado"],
         },
         {
           model: Vendedor,
-          as: "vendedor", // 🔹 Aquí también usa "vendedor"
+          as: "vendedor",
           attributes: ["nombre"],
           required: true,
         },
       ],
     });
 
-    let mayorDeuda = { nombre: "Sin Vendedor", saldoPendiente: 0 };
-
-    deudas.forEach((venta) => {
-      const totalPagado = (venta.pagos || []).reduce(
-        (total, pago) => total + parseFloat(pago.monto_pagado || 0),
+    const deudasPorVendedor = deudas.reduce((acc, venta) => {
+      const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
+      const totalPagado = pagos.reduce(
+        (total, pago) => total + (parseFloat(pago.monto_pagado) || 0),
         0
       );
-
       const saldoPendiente = (parseFloat(venta.valor_total) || 0) - totalPagado;
+
+      const vendedorId = venta.vendedor_id || 0;
       const nombreVendedor = venta.vendedor
         ? venta.vendedor.nombre
         : "Sin Vendedor";
 
-      if (saldoPendiente > mayorDeuda.saldoPendiente) {
-        mayorDeuda = {
+      if (!acc[vendedorId]) {
+        acc[vendedorId] = {
           nombre: nombreVendedor,
-          saldoPendiente,
+          saldoPendienteTotal: 0,
+        };
+      }
+      acc[vendedorId].saldoPendienteTotal += saldoPendiente;
+      return acc;
+    }, {});
+
+    // Encontrar el vendedor con la mayor deuda acumulada
+    let mayorDeuda = { nombre: "Sin Vendedor", saldoPendiente: 0 };
+
+    Object.values(deudasPorVendedor).forEach((vendedor) => {
+      if (vendedor.saldoPendienteTotal > mayorDeuda.saldoPendiente) {
+        mayorDeuda = {
+          nombre: vendedor.nombre,
+          saldoPendiente: vendedor.saldoPendienteTotal,
         };
       }
     });
@@ -238,6 +254,14 @@ exports.obtenerEstadisticas = async (models) => {
 
     const saldoPendiente = totalVentas - totalPagos;
 
+    // Agregar cantidad total de ventas y pagos
+    const cantidadTotalVentas = ventas.length;
+    const cantidadTotalPagos = deudas.reduce(
+      (sum, venta) =>
+        sum + (Array.isArray(venta.pagos) ? venta.pagos.length : 0),
+      0
+    );
+
     return {
       topVendedores: Object.values(ventasPorVendedor).sort(
         (a, b) => b.totalVentas - a.totalVentas
@@ -247,6 +271,8 @@ exports.obtenerEstadisticas = async (models) => {
         totalVentas,
         totalPagos,
         saldoPendiente,
+        cantidadTotalVentas,
+        cantidadTotalPagos,
       },
     };
   } catch (error) {
