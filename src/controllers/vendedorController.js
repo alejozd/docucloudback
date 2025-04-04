@@ -262,6 +262,28 @@ exports.obtenerEstadisticas = async (models) => {
       0
     );
 
+    // Calcular montos para pagos completos, parciales y pendientes
+    let totalPagosCompletos = 0;
+    let totalPagosParciales = 0;
+    let totalPagosPendientes = 0;
+
+    deudas.forEach((venta) => {
+      const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
+      const totalPagado = pagos.reduce(
+        (total, pago) => total + (parseFloat(pago.monto_pagado) || 0),
+        0
+      );
+      const valorVenta = parseFloat(venta.valor_total) || 0;
+
+      if (totalPagado === valorVenta) {
+        totalPagosCompletos += valorVenta;
+      } else if (totalPagado > 0 && totalPagado < valorVenta) {
+        totalPagosParciales += totalPagado;
+      } else {
+        totalPagosPendientes += valorVenta;
+      }
+    });
+
     return {
       topVendedores: Object.values(ventasPorVendedor).sort(
         (a, b) => b.totalVentas - a.totalVentas
@@ -273,6 +295,9 @@ exports.obtenerEstadisticas = async (models) => {
         saldoPendiente,
         cantidadTotalVentas,
         cantidadTotalPagos,
+        totalPagosCompletos,
+        totalPagosParciales,
+        totalPagosPendientes,
       },
     };
   } catch (error) {
