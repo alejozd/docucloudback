@@ -18,10 +18,11 @@ exports.getPagos = async (models) => {
 exports.createPago = async (models, datos) => {
   try {
     const nuevoPago = await models.Pago.create(datos);
+    const venta_id = datos.venta_id;
 
     // Calcular el total pagado
     const totalPagado = await models.Pago.sum("monto_pagado", {
-      where: { venta_id },
+      where: { venta_id: venta_id },
     });
 
     // Obtener la venta asociada
@@ -96,13 +97,21 @@ exports.deletePago = async (models, id) => {
     if (!pago) {
       throw new Error("Pago no encontrado.");
     }
+
+    const venta_id = pago.venta_id;
+
     await pago.destroy();
 
     // Recalcular el estado de la venta tras eliminar un pago
     const totalPagado = await models.Pago.sum("monto_pagado", {
-      where: { venta_id },
+      where: { venta_id: venta_id },
     });
+
     const venta = await models.Venta.findByPk(venta_id);
+    if (!venta) {
+      throw new Error("Venta no encontrada.");
+    }
+
     let nuevoEstado = "pendiente";
     if (totalPagado >= venta.valor_total) {
       nuevoEstado = "completo";
@@ -113,6 +122,7 @@ exports.deletePago = async (models, id) => {
 
     return { message: "Pago eliminado correctamente." };
   } catch (error) {
+    console.error("❌ Error en deletePago:", error.message);
     throw new Error("Error al eliminar el pago.");
   }
 };
