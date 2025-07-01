@@ -64,6 +64,8 @@ app.use("/api", phraseRoutes);
 app.use("/api", segmentoRoutes);
 app.use("/api", batteryRoutes);
 app.use("/api/grabacion", grabacionRoutes);
+// Ruta para servir las grabaciones como archivos estáticos
+app.use("/grabaciones", express.static("/var/www/radio_grabaciones"));
 
 // Pasar modelos a rutas que lo necesitan
 app.use("/api", claveMediosRoutes({ SerialERP, ClaveGenerada }));
