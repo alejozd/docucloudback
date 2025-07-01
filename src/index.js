@@ -42,6 +42,7 @@ const clavesMediosGeneradasRoutes = require("./routes/clavesMediosGeneradasRoute
 const vendedoresRoutes = require("./routes/vendedoresRoutes");
 const ventaRoutes = require("./routes/ventaRoutes");
 const pagoRoutes = require("./routes/pagoRoutes");
+const grabacionRoutes = require("./routes/grabacionRoutes");
 
 // Configurar Express
 const app = express();
@@ -62,6 +63,7 @@ app.use("/api", testRoutes);
 app.use("/api", phraseRoutes);
 app.use("/api", segmentoRoutes);
 app.use("/api", batteryRoutes);
+app.use("/api/grabacion", grabacionRoutes);
 
 // Pasar modelos a rutas que lo necesitan
 app.use("/api", claveMediosRoutes({ SerialERP, ClaveGenerada }));
