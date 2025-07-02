@@ -35,3 +35,35 @@ exports.setEstadoGrabacion = (req, res) => {
       .json({ error: "Error al actualizar el estado de grabación" });
   }
 };
+
+// Listar grabaciones
+exports.listarGrabaciones = (req, res) => {
+  const directorioBase = "/var/www/radio_grabaciones";
+
+  try {
+    const años = fs.readdirSync(directorioBase);
+    const lista = [];
+
+    años.forEach((año) => {
+      const meses = fs.readdirSync(path.join(directorioBase, año));
+      meses.forEach((mes) => {
+        const dias = fs.readdirSync(path.join(directorioBase, año, mes));
+        dias.forEach((dia) => {
+          const archivos = fs
+            .readdirSync(path.join(directorioBase, año, mes, dia))
+            .filter((archivo) => archivo.endsWith(".mp3"));
+
+          if (archivos.length > 0) {
+            const fecha = `${año}-${mes}-${dia}`;
+            lista.push({ fecha, archivos });
+          }
+        });
+      });
+    });
+
+    return res.json(lista);
+  } catch (error) {
+    console.error("Error al leer las grabaciones:", error);
+    return res.status(500).json({ error: "No se pudo listar las grabaciones" });
+  }
+};
