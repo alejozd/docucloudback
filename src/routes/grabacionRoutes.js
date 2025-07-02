@@ -9,6 +9,6 @@ router.get("/estado", grabacionController.getEstadoGrabacion);
 router.post("/estado", express.json(), grabacionController.setEstadoGrabacion);
 
 // Ruta para listar todas las grabaciones
-router.get("/lista", listarGrabaciones);
+router.get("/lista", grabacionController.listarGrabaciones);
 
 module.exports = router;
