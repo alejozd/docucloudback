@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
+    "music-metadata": "^11.6.1",
     "mysql2": "^3.9.7",
     "sequelize": "^6.37.3"
   }

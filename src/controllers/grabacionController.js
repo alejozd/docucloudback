@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const mm = require("music-metadata");
 
 const CONFIG_PATH = path.join(__dirname, "../config/grabacion.json");
 
@@ -37,29 +38,76 @@ exports.setEstadoGrabacion = (req, res) => {
 };
 
 // Listar grabaciones
-exports.listarGrabaciones = (req, res) => {
+exports.listarGrabaciones = async (req, res) => {
+  // CAMBIO: Ahora es una función asíncrona
   const directorioBase = "/var/www/radio_grabaciones";
+  const lista = [];
 
   try {
     const años = fs.readdirSync(directorioBase);
-    const lista = [];
 
-    años.forEach((año) => {
+    for (const año of años) {
+      // Usamos for...of para poder usar await
       const meses = fs.readdirSync(path.join(directorioBase, año));
-      meses.forEach((mes) => {
+
+      for (const mes of meses) {
+        // Usamos for...of
         const dias = fs.readdirSync(path.join(directorioBase, año, mes));
-        dias.forEach((dia) => {
-          const archivos = fs
+
+        for (const dia of dias) {
+          // Usamos for...of
+          const archivosEnDirectorio = fs
             .readdirSync(path.join(directorioBase, año, mes, dia))
             .filter((archivo) => archivo.endsWith(".mp3"));
 
-          if (archivos.length > 0) {
-            const fecha = `${año}-${mes}-${dia}`;
-            lista.push({ fecha, archivos });
+          const archivosConMetadatos = [];
+
+          for (const nombreArchivo of archivosEnDirectorio) {
+            // Usamos for...of para await
+            const rutaCompletaArchivo = path.join(
+              directorioBase,
+              año,
+              mes,
+              dia,
+              nombreArchivo
+            );
+            let titulo = nombreArchivo.replace(".mp3", ""); // Título por defecto
+            let artista = "Desconocido"; // Artista por defecto
+            let duracion = 0; // Duración por defecto
+
+            try {
+              const metadata = await mm.parseFile(rutaCompletaArchivo);
+              if (metadata.common) {
+                titulo = metadata.common.title || titulo;
+                artista = metadata.common.artist || artista;
+              }
+              if (metadata.format && metadata.format.duration) {
+                duracion = Math.round(metadata.format.duration); // Duración en segundos
+              }
+            } catch (metadataError) {
+              // No es crítico si no se pueden leer los metadatos de un archivo
+              console.warn(
+                `No se pudieron leer metadatos de ${nombreArchivo}:`,
+                metadataError.message
+              );
+            }
+
+            archivosConMetadatos.push({
+              nombreArchivo: nombreArchivo,
+              titulo: titulo,
+              artista: artista,
+              duracion_segundos: duracion,
+              // Puedes añadir más campos si los necesitas, como 'album', 'year', etc.
+            });
           }
-        });
-      });
-    });
+
+          if (archivosConMetadatos.length > 0) {
+            const fecha = `${año}-${mes}-${dia}`;
+            lista.push({ fecha, archivos: archivosConMetadatos });
+          }
+        }
+      }
+    }
 
     return res.json(lista);
   } catch (error) {
