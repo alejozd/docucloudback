@@ -59,15 +59,15 @@ app.use(express.json());
 // --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
 // Define la misma ruta base que usas en videoController.js para servir los archivos
 // Si estás usando la ruta local de Windows:
-const LOCAL_VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
+// const LOCAL_VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
 // Si estás en Linux/Ubuntu:
-// const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
+const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
 
 // NUEVO: Ruta para servir los videos como archivos estáticos
 // Esto mapea la URL "/videos" a tu directorio local "C:/Users/Alejandro Zambrano/Documents/Alejo"
-app.use("/videos", express.static(LOCAL_VIDEO_BASE_DIR));
+// app.use("/videos", express.static(LOCAL_VIDEO_BASE_DIR));
 // Cuando pases a Ubuntu, cambiarías la línea de arriba por:
-// app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
+app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
 
 // Rutas de API
 app.use("/api", clienteRoutes);
