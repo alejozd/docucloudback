@@ -1,0 +1,88 @@
+const fs = require("fs");
+const path = require("path");
+const mm = require("music-metadata"); // music-metadata también funciona para algunos metadatos de video
+// const ffmpeg = require("fluent-ffmpeg"); // fluent-ffmpeg es más potente, pero requiere la instalación de ffmpeg/ffprobe en el sistema.
+// Por ahora, usaremos music-metadata que es solo JS y cubre los campos que mencionas.
+
+// Define la ruta base donde se guardarán los videos
+// const VIDEO_BASE_DIR = "/var/www/videos"; // La ruta base, donde están 'meditaciones', 'otro_tipo_video', etc.
+const VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
+
+// Función para listar videos y sus metadatos de forma recursiva
+exports.listarVideos = async (req, res) => {
+  const listaVideos = [];
+
+  try {
+    // Función recursiva para recorrer directorios
+    const readDirectory = async (currentPath, relativePath = "") => {
+      const items = fs.readdirSync(currentPath);
+
+      for (const item of items) {
+        const itemPath = path.join(currentPath, item);
+        const itemRelativePath = path.join(relativePath, item);
+        const stats = fs.statSync(itemPath);
+
+        if (stats.isDirectory()) {
+          // Si es un directorio, recursivamente lee su contenido
+          await readDirectory(itemPath, itemRelativePath);
+        } else if (stats.isFile() && item.endsWith(".mp4")) {
+          // Si es un archivo MP4, lee sus metadatos
+          let titulo = item.replace(".mp4", "");
+          let artista = "Desconocido"; // Intérprete
+          let año = null;
+          let genero = "Desconocido";
+          let duracion_segundos = 0;
+          let url = `/videos/${itemRelativePath}`; // URL completa desde la base del servidor web
+
+          try {
+            const metadata = await mm.parseFile(itemPath);
+            if (metadata.common) {
+              titulo = metadata.common.title || titulo;
+              artista =
+                metadata.common.artist ||
+                metadata.common.albumartist ||
+                artista; // Intérprete
+              año = metadata.common.year || null;
+              genero =
+                metadata.common.genre && metadata.common.genre.length > 0
+                  ? metadata.common.genre[0]
+                  : genero;
+            }
+            if (metadata.format && metadata.format.duration) {
+              duracion_segundos = Math.round(metadata.format.duration);
+            }
+          } catch (metaError) {
+            console.warn(
+              `[WARN] No se pudieron leer metadatos de ${itemRelativePath}:`,
+              metaError.message
+            );
+          }
+
+          listaVideos.push({
+            nombreArchivo: item, // Solo el nombre del archivo
+            rutaRelativa: itemRelativePath, // Ruta relativa dentro de /var/www/videos (ej. meditaciones/mi_meditacion.mp4)
+            titulo: titulo,
+            artista: artista, // Mapeado a Intérprete
+            año: año,
+            genero: genero,
+            duracion_segundos: duracion_segundos,
+            url: url, // URL completa para el frontend
+          });
+        }
+      }
+    };
+
+    // Inicia la lectura desde el directorio base de videos
+    await readDirectory(VIDEO_BASE_DIR);
+
+    return res.json(listaVideos);
+  } catch (error) {
+    console.error("Error al listar videos:", error);
+    if (error.code === "ENOENT") {
+      return res.status(404).json({
+        error: `El directorio base de videos no existe: ${VIDEO_BASE_DIR}`,
+      });
+    }
+    return res.status(500).json({ error: "No se pudo listar los videos" });
+  }
+};

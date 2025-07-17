@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 require("dotenv").config();
+const path = require("path");
 const {
   sequelize,
   Cliente,
@@ -43,6 +44,7 @@ const vendedoresRoutes = require("./routes/vendedoresRoutes");
 const ventaRoutes = require("./routes/ventaRoutes");
 const pagoRoutes = require("./routes/pagoRoutes");
 const grabacionRoutes = require("./routes/grabacionRoutes");
+const videoRoutes = require("./routes/videoRoutes");
 
 // Configurar Express
 const app = express();
@@ -53,6 +55,19 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
+
+// --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
+// Define la misma ruta base que usas en videoController.js para servir los archivos
+// Si estás usando la ruta local de Windows:
+const LOCAL_VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
+// Si estás en Linux/Ubuntu:
+// const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
+
+// NUEVO: Ruta para servir los videos como archivos estáticos
+// Esto mapea la URL "/videos" a tu directorio local "C:/Users/Alejandro Zambrano/Documents/Alejo"
+app.use("/videos", express.static(LOCAL_VIDEO_BASE_DIR));
+// Cuando pases a Ubuntu, cambiarías la línea de arriba por:
+// app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
 
 // Rutas de API
 app.use("/api", clienteRoutes);
@@ -66,6 +81,8 @@ app.use("/api", batteryRoutes);
 app.use("/api/grabacion", grabacionRoutes);
 // Ruta para servir las grabaciones como archivos estáticos
 app.use("/grabaciones", express.static("/var/www/radio_grabaciones"));
+// Ruta para servir los videos
+app.use("/api/video", videoRoutes);
 
 // Pasar modelos a rutas que lo necesitan
 app.use("/api", claveMediosRoutes({ SerialERP, ClaveGenerada }));
