@@ -5,8 +5,8 @@ const mm = require("music-metadata"); // music-metadata también funciona para a
 // Por ahora, usaremos music-metadata que es solo JS y cubre los campos que mencionas.
 
 // Define la ruta base donde se guardarán los videos
-// const VIDEO_BASE_DIR = "/var/www/videos"; // La ruta base, donde están 'meditaciones', 'otro_tipo_video', etc.
-const VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
+const VIDEO_BASE_DIR = "/var/www/videos"; // La ruta base, donde están 'meditaciones', 'otro_tipo_video', etc.
+// const VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
 
 // Función para listar videos y sus metadatos de forma recursiva
 exports.listarVideos = async (req, res) => {
