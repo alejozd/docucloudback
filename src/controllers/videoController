@@ -34,6 +34,14 @@ exports.listarVideos = async (req, res) => {
           let duracion_segundos = 0;
           let url = `/videos/${itemRelativePath}`; // URL completa desde la base del servidor web
 
+          let carpeta = "Sin Categoría"; // Valor por defecto si no hay subcarpeta
+
+          const relativeParts = relativePath.split(path.sep); // Divide la ruta relativa por el separador de sistema
+          if (relativeParts.length > 0 && relativeParts[0] !== "") {
+            // Si hay partes, la primera es el nombre de la carpeta raíz dentro de VIDEO_BASE_DIR
+            carpeta = relativeParts[0];
+          }
+
           try {
             const metadata = await mm.parseFile(itemPath);
             if (metadata.common) {
@@ -61,6 +69,7 @@ exports.listarVideos = async (req, res) => {
           listaVideos.push({
             nombreArchivo: item, // Solo el nombre del archivo
             rutaRelativa: itemRelativePath, // Ruta relativa dentro de /var/www/videos (ej. meditaciones/mi_meditacion.mp4)
+            carpeta: carpeta,
             titulo: titulo,
             artista: artista, // Mapeado a Intérprete
             año: año,
