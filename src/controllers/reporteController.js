@@ -5,19 +5,20 @@ function decodeFromBase64(encodedData) {
   return Buffer.from(encodedData, "base64").toString("utf-8");
 }
 
-// Generar clave MD5
+// Generar clave MD5: usa los primeros 16 caracteres y convierte a mayúsculas
 function generateMD5(input) {
   return crypto
     .createHash("md5")
     .update(input, "utf8")
     .digest("hex")
-    .substring(0, 16)
-    .toUpperCase();
+    .substring(0, 16) // Usar solo los primeros 16 caracteres, igual que en Delphi
+    .toUpperCase(); // Convertir a mayúsculas (Delphi lo hace por defecto con HashStringAsHex)
 }
 
 // Función auxiliar para determinar la descripción de los módulos
+// Esta función ahora usa el ModuloIdentificador completo.
 function getModuleDescription(moduleIdentifier) {
-  if (!moduleIdentifier) {
+  if (!moduleIdentifier || moduleIdentifier.trim() === "") {
     return "Módulo no especificado";
   }
 
@@ -32,6 +33,7 @@ function getModuleDescription(moduleIdentifier) {
   if (sModulos.length > 2) {
     return sModulos.substring(0, sModulos.length - 2);
   } else {
+    // Si la cadena de módulos no coincide con ninguna letra válida, devuelve "Módulo no especificado"
     return "Módulo no especificado";
   }
 }
@@ -39,7 +41,6 @@ function getModuleDescription(moduleIdentifier) {
 // Procesar el serial
 function processSerial(serial) {
   const decodedString = decodeFromBase64(serial);
-  //   console.log("serial: ", serial);
   // Verificar y dividir la cadena
   const separator = "*-+";
   const separatorPos = decodedString.indexOf(separator);
@@ -61,13 +62,15 @@ function processSerial(serial) {
   const procesadorId = parts[0];
   const hardDriveSerial = parts[1];
   const systemName = parts[2];
-  const ModuloIdentificador = parts[3].charAt(0);
 
-  // Determinar la descripción del módulo (opcional, solo para información de retorno)
+  // *** CORRECCIÓN CRÍTICA: parts[3] contiene la cadena completa de módulos (ej: 'RPHC')
+  const ModuloIdentificador = parts[3];
+
+  // Determinar la descripción del módulo
   const moduloDescription = getModuleDescription(ModuloIdentificador);
 
   // Generar la clave
-  // *** CAMBIO CRÍTICO: El input para la clave debe ser soloSerial + ModuloIdentificador (la cadena completa)
+  // El input para la clave debe ser soloSerial + ModuloIdentificador (la cadena completa)
   const claveInput = soloSerial + ModuloIdentificador;
   const clave = generateMD5(claveInput);
 
@@ -76,7 +79,7 @@ function processSerial(serial) {
     procesadorId,
     hardDriveSerial,
     systemName,
-    letraModulo: ModuloIdentificador, // Renombrado para reflejar que es la cadena completa
+    letraModulo: ModuloIdentificador, // La cadena completa (ej: 'RPHC')
     modulo: moduloDescription, // Descripción de los módulos
     clave,
   };
@@ -93,9 +96,11 @@ exports.generateReportKey = (req, res) => {
 
     const result = processSerial(serial);
 
+    // console.log("Clave generada:", result.clave); // Útil para depurar
+
     return res.status(200).json(result);
   } catch (error) {
-    console.error("Error al generar la clave:", error.message);
+    // console.error("Error al generar la clave:", error.message); // Útil para depurar
     return res.status(400).json({ error: error.message });
   }
 };
