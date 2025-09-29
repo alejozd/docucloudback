@@ -15,6 +15,27 @@ function generateMD5(input) {
     .toUpperCase();
 }
 
+// Función auxiliar para determinar la descripción de los módulos
+function getModuleDescription(moduleIdentifier) {
+  if (!moduleIdentifier) {
+    return "Módulo no especificado";
+  }
+
+  let sModulos = "";
+  // El orden no importa para la lógica, pero lo mantenemos para referencia
+  if (moduleIdentifier.includes("R")) sModulos += "Remisiones, ";
+  if (moduleIdentifier.includes("P")) sModulos += "Pedidos, ";
+  if (moduleIdentifier.includes("H")) sModulos += "Herramientas, ";
+  if (moduleIdentifier.includes("C")) sModulos += "Cartera, ";
+
+  // Eliminar la coma y el espacio final
+  if (sModulos.length > 2) {
+    return sModulos.substring(0, sModulos.length - 2);
+  } else {
+    return "Módulo no especificado";
+  }
+}
+
 // Procesar el serial
 function processSerial(serial) {
   const decodedString = decodeFromBase64(serial);
@@ -23,7 +44,7 @@ function processSerial(serial) {
   const separator = "*-+";
   const separatorPos = decodedString.indexOf(separator);
   if (separatorPos === -1) {
-    throw new Error("Formato del serial no válido.");
+    throw new Error("Formato del serial no válido: separador no encontrado.");
   }
 
   const soloSerial = decodedString.substring(0, separatorPos);
@@ -40,26 +61,14 @@ function processSerial(serial) {
   const procesadorId = parts[0];
   const hardDriveSerial = parts[1];
   const systemName = parts[2];
-  const letraModulo = parts[3].charAt(0);
+  const ModuloIdentificador = parts[3].charAt(0);
 
-  // Determinar módulo
-  let modulo;
-  switch (letraModulo) {
-    case "T":
-      modulo = "Todos";
-      break;
-    case "R":
-      modulo = "Remisiones";
-      break;
-    case "P":
-      modulo = "Pedidos";
-      break;
-    default:
-      modulo = "Desconocido";
-  }
+  // Determinar la descripción del módulo (opcional, solo para información de retorno)
+  const moduloDescription = getModuleDescription(ModuloIdentificador);
 
   // Generar la clave
-  const claveInput = soloSerial + letraModulo;
+  // *** CAMBIO CRÍTICO: El input para la clave debe ser soloSerial + ModuloIdentificador (la cadena completa)
+  const claveInput = soloSerial + ModuloIdentificador;
   const clave = generateMD5(claveInput);
 
   return {
@@ -67,8 +76,8 @@ function processSerial(serial) {
     procesadorId,
     hardDriveSerial,
     systemName,
-    letraModulo,
-    modulo,
+    letraModulo: ModuloIdentificador, // Renombrado para reflejar que es la cadena completa
+    modulo: moduloDescription, // Descripción de los módulos
     clave,
   };
 }
@@ -86,6 +95,7 @@ exports.generateReportKey = (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
+    console.error("Error al generar la clave:", error.message);
     return res.status(400).json({ error: error.message });
   }
 };
