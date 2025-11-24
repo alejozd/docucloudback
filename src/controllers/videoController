@@ -1,102 +1,115 @@
 const fs = require("fs");
 const path = require("path");
-const mm = require("music-metadata"); //
+const mm = require("music-metadata");
 
-const VIDEO_BASE_DIR = "/var/www/videos"; //
+// Define la ruta base donde se guardarán los videos
+const VIDEO_BASE_DIR = "/var/www/videos";
+// const VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo"; // Tu ruta de desarrollo
 
-// [MODIFICADO] Función para listar videos y sus metadatos de forma recursiva
-exports.listarVideos = async (req, res) => {
-  const listaVideos = [];
+// =========================================================
+// FUNCIÓN PESADA: Escanea disco y extrae metadatos
+// Esta función SÓLO se llama una vez al inicio del servidor (desde index.js)
+// =========================================================
+async function scanAndProcessVideos() {
   const promises = []; // Array para guardar todas las promesas de lectura de metadatos
 
-  try {
-    const readDirectory = async (currentPath, relativePath = "") => {
-      const items = fs.readdirSync(currentPath); // Mantenemos síncrona la lectura del directorio para simplicidad
+  // Función recursiva para recorrer directorios
+  const readDirectory = async (currentPath, relativePath = "") => {
+    const items = fs.readdirSync(currentPath);
 
-      for (const item of items) {
-        const itemPath = path.join(currentPath, item); //
-        const itemRelativePath = path.join(relativePath, item); //
-        const stats = fs.statSync(itemPath);
+    for (const item of items) {
+      const itemPath = path.join(currentPath, item);
+      const itemRelativePath = path.join(relativePath, item);
+      const stats = fs.statSync(itemPath);
 
-        if (stats.isDirectory()) {
-          await readDirectory(itemPath, itemRelativePath); //
-        } else if (stats.isFile() && item.endsWith(".mp4")) {
-          // [NUEVO] Agregamos una función que devuelve una promesa (lectura de metadatos) al array de promises
-          promises.push(
-            (async () => {
-              let titulo = item.replace(".mp4", ""); //
-              let artista = "Desconocido"; //
-              let año = null; //
-              let genero = "Desconocido"; //
-              let duracion_segundos = 0; //
-              let url = `/videos/${itemRelativePath}`; //
-              let carpeta = "Sin Categoría"; //
+      if (stats.isDirectory()) {
+        await readDirectory(itemPath, itemRelativePath);
+      } else if (stats.isFile() && item.endsWith(".mp4")) {
+        // Obtenemos el nombre de la carpeta (categoría)
+        const parts = itemRelativePath.split(path.sep);
+        const carpeta = parts.length > 1 ? parts[0] : "Sin Categoría";
+        const url = `/videos/${itemRelativePath.replace(/\\/g, "/")}`; // URL para el frontend
 
-              const relativeParts = relativePath.split(path.sep); //
-              if (relativeParts.length > 0 && relativeParts[0] !== "") {
-                carpeta = relativeParts[0]; //
+        // Agregamos una función que devuelve una promesa (lectura de metadatos) al array
+        promises.push(
+          (async () => {
+            let titulo = item.replace(".mp4", "");
+            let artista = "Desconocido";
+            let año = null;
+            let genero = "Desconocido";
+            let duracion_segundos = 0;
+
+            try {
+              // Lectura intensiva de metadatos
+              const metadata = await mm.parseFile(itemPath);
+
+              titulo = metadata.common.title || titulo;
+              artista =
+                metadata.common.artist ||
+                metadata.common.albumartist ||
+                artista;
+              año = metadata.common.year || año;
+              genero =
+                metadata.common.genre && metadata.common.genre.length > 0
+                  ? metadata.common.genre[0]
+                  : genero;
+              if (metadata.format && metadata.format.duration) {
+                duracion_segundos = Math.round(metadata.format.duration);
               }
+            } catch (metaError) {
+              console.warn(
+                `[WARN] No se pudieron leer metadatos de ${itemRelativePath}:`,
+                metaError.message
+              );
+            }
 
-              try {
-                // [CLAVE] Esta es la operación intensa, pero se ejecuta en paralelo con las demás
-                const metadata = await mm.parseFile(itemPath); //
-                // ... (Manejo de metadatos) ...
-                if (metadata.common) {
-                  titulo = metadata.common.title || titulo; //
-                  artista =
-                    metadata.common.artist ||
-                    metadata.common.albumartist ||
-                    artista; //
-                  año = metadata.common.year || null; //
-                  genero =
-                    metadata.common.genre && metadata.common.genre.length > 0
-                      ? metadata.common.genre[0]
-                      : genero; //
-                }
-                if (metadata.format && metadata.format.duration) {
-                  duracion_segundos = Math.round(metadata.format.duration); //
-                }
-              } catch (metaError) {
-                console.warn(
-                  `[WARN] No se pudieron leer metadatos de ${itemRelativePath}:`,
-                  metaError.message
-                ); //
-              }
-
-              // Devolvemos el objeto de video para Promise.all
-              return {
-                nombreArchivo: item, //
-                rutaRelativa: itemRelativePath, //
-                carpeta: carpeta,
-                titulo: titulo,
-                artista: artista, //
-                año: año, //
-                genero: genero, //
-                duracion_segundos: duracion_segundos, //
-                url: url, //
-              };
-            })()
-          );
-        }
+            // Devolvemos el objeto de video para Promise.all
+            return {
+              nombreArchivo: item,
+              rutaRelativa: itemRelativePath,
+              carpeta: carpeta,
+              titulo: titulo,
+              artista: artista,
+              año: año,
+              genero: genero,
+              duracion_segundos: duracion_segundos,
+              url: url,
+            };
+          })()
+        );
       }
-    };
-
-    // 1. Inicia la lectura del directorio y acumula las promesas
-    await readDirectory(VIDEO_BASE_DIR); //
-
-    // 2. [CLAVE] Espera a que TODAS las promesas de lectura de metadatos se resuelvan en paralelo
-    const results = await Promise.all(promises);
-
-    // 3. Filtra cualquier resultado nulo (si manejaste errores dentro de las promesas) y devuelve
-    return res.json(results.filter((r) => r !== null));
-  } catch (error) {
-    // ... (Manejo de errores) ...
-    console.error("Error al listar videos:", error); //
-    if (error.code === "ENOENT") {
-      return res.status(404).json({
-        error: `El directorio base de videos no existe: ${VIDEO_BASE_DIR}`,
-      }); //
     }
-    return res.status(500).json({ error: "No se pudo listar los videos" }); //
+  };
+
+  // 1. Inicia la lectura del directorio y acumula las promesas
+  await readDirectory(VIDEO_BASE_DIR);
+
+  // 2. Espera a que TODAS las promesas de lectura de metadatos se resuelvan
+  const results = await Promise.all(promises);
+
+  // 3. Devuelve la lista limpia, lista para ser cacheada
+  return results.filter((r) => r !== null);
+}
+
+// =========================================================
+// RUTA HTTP: Lista videos (SÓLO lee de la caché)
+// =========================================================
+exports.listarVideos = (req, res) => {
+  // [CLAVE] Lee de la caché global que se llenó en index.js
+  if (!global.videoCache || global.videoCache.length === 0) {
+    console.error(
+      "La caché de videos está vacía. El servidor no ha inicializado o falló la carga."
+    );
+    // Devolvemos un 503 (Servicio no disponible) para indicar que la caché está en proceso o falló
+    return res.status(503).json({
+      error:
+        "La lista de videos no está disponible. El servidor está inicializando o ha ocurrido un error.",
+    });
   }
+
+  // [CLAVE] Devuelve la lista INSTANTÁNEAMENTE desde la memoria
+  return res.json(global.videoCache);
 };
+
+// [Exportar la función pesada] Para que index.js pueda llamarla una sola vez
+exports.scanAndProcessVideos = scanAndProcessVideos;

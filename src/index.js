@@ -22,6 +22,7 @@ const {
 const serialesERPController = require("./controllers/serialesERPController");
 const clientesMediosController = require("./controllers/clientesMediosController");
 const clavesMediosGeneradasController = require("./controllers/clavesMediosGeneradasController");
+const videoController = require("./controllers/videoController");
 
 // Importar rutas
 const clienteRoutes = require("./routes/clienteRoutes");
@@ -54,7 +55,16 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 //Configurar CORS y middlewares
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.json());
+// app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// [3] SERVIR ARCHIVOS ESTÁTICOS (VIDEOS)
+// ¡IMPORTANTE! Ajusta 'videos' al directorio REAL donde Express debe buscar los archivos.
+// Si tus videos están en `/var/www/videos`, deberías usar `express.static('/var/www/videos')`
+app.use(
+  "/videos",
+  express.static(path.join(__dirname, "..", "..", "videos_servidos"))
+);
 
 // --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
 // Define la misma ruta base que usas en videoController.js para servir los archivos
@@ -63,27 +73,21 @@ app.use(express.json());
 // Si estás en Linux/Ubuntu:
 const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
 
-// NUEVO: Ruta para servir los videos como archivos estáticos
-// Esto mapea la URL "/videos" a tu directorio local "C:/Users/Alejandro Zambrano/Documents/Alejo"
-// app.use("/videos", express.static(LOCAL_VIDEO_BASE_DIR));
-// Cuando pases a Ubuntu, cambiarías la línea de arriba por:
-// app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
-// [MODIFICADO] Ruta para servir los videos como archivos estáticos con Caching
-app.use(
-  "/videos",
-  express.static(LINUX_VIDEO_BASE_DIR, {
-    // Configura el encabezado Cache-Control: public, max-age=...
-    // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
-    maxAge: "1y",
-    // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
-    setHeaders: (res, path, stat) => {
-      // Solo aplica para archivos MP4 o de video
-      if (path.endsWith(".mp4") || path.endsWith(".webm")) {
-        res.set("Accept-Ranges", "bytes");
-      }
-    },
-  })
-);
+// app.use(
+//   "/videos",
+//   express.static(LINUX_VIDEO_BASE_DIR, {
+//     // Configura el encabezado Cache-Control: public, max-age=...
+//     // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
+//     maxAge: "1y",
+//     // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
+//     setHeaders: (res, path, stat) => {
+//       // Solo aplica para archivos MP4 o de video
+//       if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+//         res.set("Accept-Ranges", "bytes");
+//       }
+//     },
+//   })
+// );
 
 // Rutas de API
 app.use("/api", clienteRoutes);
@@ -135,29 +139,42 @@ app.get("/", (req, res) => {
   res.send("Welcome to the API!");
 });
 
-// Sincronizar la base de datos según el entorno
+// Función centralizada para cargar la caché y levantar el servidor
+async function loadCacheAndStartServer(databaseSyncPromise) {
+  try {
+    // Espera a que la BD esté lista (sea sync o authenticate)
+    await databaseSyncPromise;
+    console.log("Database connection established.");
+
+    // [CLAVE] Carga de Caché ÚNICA
+    console.log("Cargando caché de videos (demora única en el inicio)...");
+    try {
+      // La variable global.videoCache se define aquí
+      global.videoCache = await videoController.scanAndProcessVideos();
+      console.log(
+        `✅ Caché de videos cargada. Total: ${global.videoCache.length} videos.`
+      );
+    } catch (e) {
+      console.error("❌ ERROR FATAL al cargar la caché de videos:", e.message);
+      global.videoCache = []; // Si falla, inicializa vacío para no romper la app
+    }
+
+    // Inicia el servidor
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
+    });
+  } catch (error) {
+    console.error("Unable to connect to the database or start server:", error);
+  }
+}
+
+// Lógica de inicio según el entorno
 if (NODE_ENV === "development") {
-  sequelize
-    .sync({ alter: true })
-    .then(() => {
-      console.log("Database synced in development mode");
-      app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
-      });
-    })
-    .catch((error) =>
-      console.error("Unable to connect to the database:", error)
-    );
+  // En desarrollo: sincronizar BD (con alter) y luego cargar la caché
+  const dbPromise = sequelize.sync({ alter: true });
+  loadCacheAndStartServer(dbPromise);
 } else {
-  sequelize
-    .authenticate()
-    .then(() => {
-      console.log("Database connected successfully");
-      app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
-      });
-    })
-    .catch((error) =>
-      console.error("Unable to connect to the database:", error)
-    );
+  // En producción: solo autenticar (conectar) BD y luego cargar la caché
+  const dbPromise = sequelize.authenticate();
+  loadCacheAndStartServer(dbPromise);
 }
