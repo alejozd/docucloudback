@@ -67,7 +67,23 @@ const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
 // Esto mapea la URL "/videos" a tu directorio local "C:/Users/Alejandro Zambrano/Documents/Alejo"
 // app.use("/videos", express.static(LOCAL_VIDEO_BASE_DIR));
 // Cuando pases a Ubuntu, cambiarías la línea de arriba por:
-app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
+// app.use("/videos", express.static(LINUX_VIDEO_BASE_DIR));
+// [MODIFICADO] Ruta para servir los videos como archivos estáticos con Caching
+app.use(
+  "/videos",
+  express.static(LINUX_VIDEO_BASE_DIR, {
+    // Configura el encabezado Cache-Control: public, max-age=...
+    // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
+    maxAge: "1y",
+    // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
+    setHeaders: (res, path, stat) => {
+      // Solo aplica para archivos MP4 o de video
+      if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+        res.set("Accept-Ranges", "bytes");
+      }
+    },
+  })
+);
 
 // Rutas de API
 app.use("/api", clienteRoutes);
