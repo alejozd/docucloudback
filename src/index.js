@@ -61,10 +61,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // [3] SERVIR ARCHIVOS ESTÁTICOS (VIDEOS)
 // ¡IMPORTANTE! Ajusta 'videos' al directorio REAL donde Express debe buscar los archivos.
 // Si tus videos están en `/var/www/videos`, deberías usar `express.static('/var/www/videos')`
-app.use(
-  "/videos",
-  express.static(path.join(__dirname, "..", "..", "videos_servidos"))
-);
+// app.use(
+//   "/videos",
+//   express.static(path.join(__dirname, "..", "..", "videos_servidos"))
+// );
 
 // --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
 // Define la misma ruta base que usas en videoController.js para servir los archivos
@@ -73,21 +73,21 @@ app.use(
 // Si estás en Linux/Ubuntu:
 const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
 
-// app.use(
-//   "/videos",
-//   express.static(LINUX_VIDEO_BASE_DIR, {
-//     // Configura el encabezado Cache-Control: public, max-age=...
-//     // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
-//     maxAge: "1y",
-//     // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
-//     setHeaders: (res, path, stat) => {
-//       // Solo aplica para archivos MP4 o de video
-//       if (path.endsWith(".mp4") || path.endsWith(".webm")) {
-//         res.set("Accept-Ranges", "bytes");
-//       }
-//     },
-//   })
-// );
+app.use(
+  "/videos",
+  express.static(LINUX_VIDEO_BASE_DIR, {
+    // Configura el encabezado Cache-Control: public, max-age=...
+    // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
+    maxAge: "1y",
+    // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
+    setHeaders: (res, path, stat) => {
+      // Solo aplica para archivos MP4 o de video
+      if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+        res.set("Accept-Ranges", "bytes");
+      }
+    },
+  })
+);
 
 // Rutas de API
 app.use("/api", clienteRoutes);
