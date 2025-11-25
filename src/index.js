@@ -58,13 +58,16 @@ app.use(bodyParser.json());
 // app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// [3] SERVIR ARCHIVOS ESTÁTICOS (VIDEOS)
-// ¡IMPORTANTE! Ajusta 'videos' al directorio REAL donde Express debe buscar los archivos.
-// Si tus videos están en `/var/www/videos`, deberías usar `express.static('/var/www/videos')`
-// app.use(
-//   "/videos",
-//   express.static(path.join(__dirname, "..", "..", "videos_servidos"))
-// );
+app.use("/videos", (req, res, next) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Range");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
 
 // --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
 // Define la misma ruta base que usas en videoController.js para servir los archivos
