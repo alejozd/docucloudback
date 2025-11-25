@@ -69,23 +69,21 @@ app.use("/videos", (req, res, next) => {
   next();
 });
 
-// --- CONFIGURACIÓN DE SERVICIO DE ARCHIVOS ESTÁTICOS ---
-// Define la misma ruta base que usas en videoController.js para servir los archivos
-// Si estás usando la ruta local de Windows:
-// const LOCAL_VIDEO_BASE_DIR = "C:/Users/Alejandro Zambrano/Documents/Alejo";
+app.options("/videos/*", (req, res) => {
+  // ... (configuración de encabezados CORS)
+  res.set("Access-Control-Allow-Headers", "Content-Type, Range");
+  res.status(204).end();
+});
+
 // Si estás en Linux/Ubuntu:
 const LINUX_VIDEO_BASE_DIR = "/var/www/videos";
 
 app.use(
   "/videos",
   express.static(LINUX_VIDEO_BASE_DIR, {
-    // Configura el encabezado Cache-Control: public, max-age=...
-    // 31536000 segundos = 1 año. Cloudflare y el navegador lo guardarán localmente por este tiempo.
-    maxAge: "1y",
-    // Opcional pero recomendado para streaming: asegura que el servidor envía el encabezado
     setHeaders: (res, path, stat) => {
-      // Solo aplica para archivos MP4 o de video
       if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+        res.set("Access-Control-Allow-Origin", "*");
         res.set("Accept-Ranges", "bytes");
       }
     },
