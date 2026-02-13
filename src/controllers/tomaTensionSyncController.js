@@ -35,4 +35,19 @@ const syncTomaTension = async (req, res) => {
   }
 };
 
-module.exports = { syncTomaTension };
+const getTomaTensionSync = async (req, res) => {
+  try {
+    const registros = await TomaTensionSync.findAll({
+      order: [["fecha_registro", "DESC"], ["id", "DESC"]],
+    });
+
+    return res.status(200).json(registros);
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error al obtener tomas de tensión sincronizadas",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { syncTomaTension, getTomaTensionSync };
