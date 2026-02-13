@@ -46,6 +46,7 @@ const ventaRoutes = require("./routes/ventaRoutes");
 const pagoRoutes = require("./routes/pagoRoutes");
 const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
+const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 
 // Configurar Express
 const app = express();
@@ -134,6 +135,7 @@ app.use(
   registroSolicitudRoutes({ RegistroSolicitud, Autorizacion })
 );
 app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
+app.use("/api", tomaTensionSyncRoutes);
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
