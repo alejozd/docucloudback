@@ -22,6 +22,10 @@ const RegistroSolicitud = require("./RegistroSolicitud")(
   Sequelize.DataTypes
 );
 const Autorizacion = require("./Autorizacion")(sequelize, Sequelize.DataTypes);
+const TomaTensionSync = require("./TomaTensionSync")(
+  sequelize,
+  Sequelize.DataTypes
+);
 
 // Importar asociaciones
 require("../associations")({
@@ -36,6 +40,7 @@ require("../associations")({
   Pago,
   RegistroSolicitud,
   Autorizacion,
+  TomaTensionSync,
 });
 
 // Exportar modelos y conexión
@@ -52,4 +57,5 @@ module.exports = {
   Pago,
   RegistroSolicitud,
   Autorizacion,
+  TomaTensionSync,
 };
