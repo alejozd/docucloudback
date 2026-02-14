@@ -1,5 +1,4 @@
-const { Contacto } = require("../models");
-const Segmento = require("../models/Segmento");
+const { Contacto, Segmento } = require("../models");
 
 const handleServerError = (res, error, context) => {
   console.error(`Error in ${context}:`, error);

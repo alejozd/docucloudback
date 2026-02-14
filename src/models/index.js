@@ -4,6 +4,7 @@ const sequelize = require("../config/database");
 // Importar modelos
 const Cliente = require("./Cliente")(sequelize, Sequelize.DataTypes);
 const Contacto = require("./Contacto")(sequelize, Sequelize.DataTypes);
+const Segmento = require("./Segmento");
 const AsociarClienteContacto = require("./AsociarClienteContacto")(
   sequelize,
   Sequelize.DataTypes
@@ -31,6 +32,7 @@ const TomaTensionSync = require("./TomaTensionSync")(
 require("../associations")({
   Cliente,
   Contacto,
+  Segmento,
   AsociarClienteContacto,
   ClienteMedio,
   SerialERP,
@@ -48,6 +50,7 @@ module.exports = {
   sequelize,
   Cliente,
   Contacto,
+  Segmento,
   AsociarClienteContacto,
   ClienteMedio,
   SerialERP,
