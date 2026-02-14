@@ -1,47 +1,50 @@
 const Cliente = require("../models/Cliente");
 
+const handleServerError = (res, error, context) => {
+  console.error(`Error in ${context}:`, error);
+  return res.status(500).json({ error: error.message });
+};
+
 // Obtener todos los clientes
-const getAllClientes = async (req, res) => {
+const getAllClientes = async (_req, res) => {
   try {
-    // console.log("Request body:", req.body);
     const clientes = await Cliente.findAll();
-    // console.log("Response body clientes:", clientes);
-    res.json(clientes);
+    return res.json(clientes);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "getAllClientes");
   }
 };
 
 // Crear un nuevo cliente
 const createCliente = async (req, res) => {
   try {
-    // console.log("Request body:", req.body); // Log the request body to see what data is being sent
     const cliente = await Cliente.create(req.body);
-    res.status(201).json(cliente);
+    return res.status(201).json(cliente);
   } catch (error) {
-    console.error("Error creating cliente:", error); // Log the error details
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "createCliente");
   }
 };
 
 // Actualizar un cliente existente
 const updateCliente = async (req, res) => {
   try {
-    const id = req.params.id;
+    const { id } = req.params;
+
     const [updated] = await Cliente.update(req.body, {
       where: { idcliente: id },
     });
-    if (updated !== 0) {
-      const updatedCliente = await Cliente.findOne({
-        where: { idcliente: id },
-      });
-      res.status(200).json(updatedCliente);
-    } else {
-      // throw new Error("Cliente not found");
-      res.status(200).json({ message: "No hubo cambios en el Cliente" });
+
+    if (updated === 0) {
+      return res.status(200).json({ message: "No hubo cambios en el Cliente" });
     }
+
+    const updatedCliente = await Cliente.findOne({
+      where: { idcliente: id },
+    });
+
+    return res.status(200).json(updatedCliente);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "updateCliente");
   }
 };
 
