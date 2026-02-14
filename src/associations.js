@@ -4,6 +4,7 @@ module.exports = (models) => {
   const {
     Cliente,
     Contacto,
+    Segmento,
     AsociarClienteContacto,
     ClienteMedio,
     SerialERP,
@@ -26,6 +27,12 @@ module.exports = (models) => {
     through: AsociarClienteContacto,
     foreignKey: "idcontacto",
     otherKey: "idcliente",
+  });
+
+  // Asociación entre Contacto y Segmento
+  Contacto.belongsTo(Segmento, {
+    foreignKey: "idsegmento",
+    as: "segmento",
   });
 
   // Asociaciones para las nuevas tablas

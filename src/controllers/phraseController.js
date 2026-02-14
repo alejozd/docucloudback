@@ -1,13 +1,26 @@
 const axios = require("axios");
 
-const getPhrase = async (req, res) => {
+const PHRASE_API_URL = "https://zenquotes.io/api/today";
+
+const getPhrase = async (_req, res) => {
   try {
-    const response = await axios.get(
-      "https://frasedeldia.azurewebsites.net/api/phrase"
-    );
-    res.json(response.data);
+    const { data } = await axios.get(PHRASE_API_URL, { timeout: 8000 });
+
+    const quote = Array.isArray(data) ? data[0] : data;
+
+    return res.json({
+      phrase: quote?.q || "Hoy es un buen día para empezar algo nuevo.",
+      author: quote?.a || "Desconocido",
+      source: PHRASE_API_URL,
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error fetching the phrase" });
+    console.error("Error fetching phrase from external API:", error.message);
+
+    return res.status(200).json({
+      phrase: "Hoy es un buen día para empezar algo nuevo.",
+      author: "DocuCloud",
+      source: "fallback",
+    });
   }
 };
 
