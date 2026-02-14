@@ -1,14 +1,17 @@
-const AsociarClienteContacto = require("../models/AsociarClienteContacto");
-const Cliente = require("../models/Cliente");
-const Contacto = require("../models/Contacto");
+const { AsociarClienteContacto, Cliente, Contacto } = require("../models");
+
+const handleServerError = (res, error, context) => {
+  console.error(`Error in ${context}:`, error);
+  return res.status(500).json({ error: error.message });
+};
 
 // Obtener todas las asociaciones
-const getAllAsociaciones = async (req, res) => {
+const getAllAsociaciones = async (_req, res) => {
   try {
     const asociaciones = await AsociarClienteContacto.findAll();
-    res.json(asociaciones);
+    return res.json(asociaciones);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "getAllAsociaciones");
   }
 };
 
@@ -16,40 +19,40 @@ const getAllAsociaciones = async (req, res) => {
 const createAsociacion = async (req, res) => {
   try {
     const asociacion = await AsociarClienteContacto.create(req.body);
-    res.status(201).json(asociacion);
+    return res.status(201).json(asociacion);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "createAsociacion");
   }
 };
 
 // Eliminar una asociación
 const deleteAsociacion = async (req, res) => {
   try {
-    const id = req.params.id;
+    const { id } = req.params;
     const deleted = await AsociarClienteContacto.destroy({
       where: { idasoclicont: id },
     });
+
     if (deleted) {
-      res.status(204).json({ message: "Asociación eliminada correctamente" });
-    } else {
-      res.status(404).json({ message: "Asociación no encontrada" });
+      return res.status(204).json({ message: "Asociación eliminada correctamente" });
     }
+
+    return res.status(404).json({ message: "Asociación no encontrada" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return handleServerError(res, error, "deleteAsociacion");
   }
 };
 
 // Obtener contactos asociados a un cliente
 const getContactosByCliente = async (req, res) => {
   try {
-    const clienteId = req.params.clienteId;
-    // console.log("Cliente ID recibido:", clienteId);
+    const { clienteId } = req.params;
 
     const cliente = await Cliente.findByPk(clienteId, {
       include: {
         model: Contacto,
         through: {
-          attributes: [], // No incluir atributos de la tabla intermedia
+          attributes: [],
         },
       },
     });
@@ -59,27 +62,20 @@ const getContactosByCliente = async (req, res) => {
     }
 
     const contactosAsociados = await cliente.getContactos();
-    // console.log("Contactos asociados:", contactosAsociados);
-
-    res.json(contactosAsociados); // Retornar solo los contactos
+    return res.json(contactosAsociados);
   } catch (error) {
-    console.error("Error al obtener contactos:", error);
-    res.status(500).json({ message: "Error al obtener contactos" });
+    return handleServerError(res, error, "getContactosByCliente");
   }
 };
 
 // Asociar contactos a un cliente
 const asociarContactos = async (req, res) => {
   try {
-    // console.log("clienteId:", req.params.clienteId);
-    // console.log("contactos:", req.body);
-    const clienteId = req.params.clienteId;
+    const { clienteId } = req.params;
     const { contactos } = req.body;
 
-    // Limpiar asociaciones actuales
     await AsociarClienteContacto.destroy({ where: { idcliente: clienteId } });
 
-    // Crear nuevas asociaciones
     const asociaciones = contactos.map((idcontacto) => ({
       idcliente: clienteId,
       idcontacto,
@@ -87,10 +83,9 @@ const asociarContactos = async (req, res) => {
 
     await AsociarClienteContacto.bulkCreate(asociaciones);
 
-    res.status(201).json({ message: "Asociaciones guardadas correctamente." });
+    return res.status(201).json({ message: "Asociaciones guardadas correctamente." });
   } catch (error) {
-    console.error("Error al guardar asociaciones:", error);
-    res.status(500).json({ message: "Error al guardar asociaciones." });
+    return handleServerError(res, error, "asociarContactos");
   }
 };
 
