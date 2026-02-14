@@ -10,7 +10,11 @@ const getAllContactos = async (_req, res) => {
   try {
     const contactos = await Contacto.findAll({
       include: [
-        { model: Segmento, attributes: ["idsegmento", "nombresegmento"] },
+        {
+          model: Segmento,
+          as: "segmento",
+          attributes: ["idsegmento", "nombresegmento"],
+        },
       ],
     });
 
