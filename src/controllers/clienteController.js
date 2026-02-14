@@ -1,4 +1,4 @@
-const Cliente = require("../models/Cliente");
+const { Cliente } = require("../models");
 
 const handleServerError = (res, error, context) => {
   console.error(`Error in ${context}:`, error);
