@@ -27,6 +27,7 @@ const TomaTensionSync = require("./TomaTensionSync")(
   sequelize,
   Sequelize.DataTypes
 );
+const Licencia = require("./Licencia");
 
 // Importar asociaciones
 require("../associations")({
@@ -61,4 +62,5 @@ module.exports = {
   RegistroSolicitud,
   Autorizacion,
   TomaTensionSync,
+  Licencia,
 };
