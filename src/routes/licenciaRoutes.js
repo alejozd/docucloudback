@@ -5,21 +5,21 @@ const { validateApiKey } = require('../middlewares/apiKeyMiddleware');
 const router = express.Router();
 
 /**
- * POST /api/licencias/activar
+ * POST /licencias/activar
  * Activa una licencia (primera vez → demo)
  */
-router.post('/licencias/activar', activar);
+router.post('/activar', activar);
 
 /**
- * POST /api/licencias/validar
+ * POST /licencias/validar
  * Valida una licencia (uso normal)
  */
-router.post('/licencias/validar', validar);
+router.post('/validar', validar);
 
 /**
- * POST /api/licencias/offline
+ * POST /licencias/offline
  * Genera licencia offline firmada (protegido con API KEY)
  */
-router.post('/licencias/offline', validateApiKey, offline);
+router.post('/offline', validateApiKey, offline);
 
 module.exports = router;
