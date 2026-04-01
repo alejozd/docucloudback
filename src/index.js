@@ -16,6 +16,7 @@ const {
   Pago,
   RegistroSolicitud,
   Autorizacion,
+  Licencia,
 } = require("./models");
 
 // Importar controladores
@@ -47,6 +48,7 @@ const pagoRoutes = require("./routes/pagoRoutes");
 const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
+const licenciaRoutes = require("./routes/licenciaRoutes");
 
 // Configurar Express
 const app = express();
@@ -136,6 +138,7 @@ app.use(
 );
 app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
+app.use("/api", licenciaRoutes);
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
