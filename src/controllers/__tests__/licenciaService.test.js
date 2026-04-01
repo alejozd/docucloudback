@@ -1,13 +1,16 @@
 const crypto = require("crypto");
 
-// Mock del modelo Licencia
+// Mock del modelo Licencia desde models/index
 const mockLicenciaModel = {
   findOne: jest.fn(),
   create: jest.fn(),
+  save: jest.fn(),
 };
 
-// Mock de sequelize
-jest.mock("../../models/Licencia", () => mockLicenciaModel);
+// Mock de sequelize - mockear el index completo
+jest.mock("../../models", () => ({
+  Licencia: mockLicenciaModel,
+}));
 
 // Variables de entorno para tests
 process.env.LICENCIA_SECRET_KEY = "test-secret-key";
@@ -20,22 +23,35 @@ describe("Licencia Service", () => {
   });
 
   describe("activarLicencia", () => {
-    it("debe crear una nueva licencia demo cuando no existe", async () => {
+    it("debe retornar no_autorizado si no existe licencia", async () => {
       const nit = "123456789";
       const instalacion_hash = "hash-instalacion-1";
       const app = "mi-app";
 
       mockLicenciaModel.findOne.mockResolvedValue(null);
-      mockLicenciaModel.create.mockResolvedValue({
+
+      await expect(
+        licenciaService.activarLicencia(nit, instalacion_hash, app)
+      ).rejects.toThrow("no_autorizado");
+    });
+
+    it("debe activar licencia cuando no tiene instalacion_hash", async () => {
+      const nit = "123456789";
+      const instalacion_hash = "hash-instalacion-1";
+      const app = "mi-app";
+
+      const licenciaSinActivar = {
         id: 1,
         nit,
-        instalacion_hash,
+        instalacion_hash: null,
         estado: "demo",
-        fecha_activacion: new Date(),
-        fecha_expiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
         dias_demo: 15,
-        app,
-      });
+        fecha_activacion: null,
+        fecha_expiracion: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(licenciaSinActivar);
 
       const resultado = await licenciaService.activarLicencia(
         nit,
@@ -45,14 +61,8 @@ describe("Licencia Service", () => {
 
       expect(resultado.estado).toBe("demo");
       expect(resultado.dias_restantes).toBeGreaterThanOrEqual(14);
-      expect(mockLicenciaModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          nit,
-          instalacion_hash,
-          estado: "demo",
-          app,
-        })
-      );
+      expect(licenciaSinActivar.instalacion_hash).toBe(instalacion_hash);
+      expect(licenciaSinActivar.save).toHaveBeenCalled();
     });
 
     it("debe rechazar si el hash de instalación no coincide", async () => {
@@ -220,6 +230,51 @@ describe("Licencia Service", () => {
       // Comparar con margen de误差 (por el tiempo de ejecución)
       const diferenciaMs = Math.abs(fechaExpiracion - fechaEsperada);
       expect(diferenciaMs).toBeLessThan(1000); // menos de 1 segundo
+    });
+  });
+
+  describe("crearLicencia", () => {
+    it("debe crear una nueva licencia sin instalacion_hash", async () => {
+      const nit = "123456789";
+      const app = "mi-app";
+      const dias_demo = 15;
+
+      mockLicenciaModel.findOne.mockResolvedValue(null);
+      mockLicenciaModel.create.mockResolvedValue({
+        id: 1,
+        nit,
+        app,
+        estado: "demo",
+        dias_demo,
+        instalacion_hash: null,
+      });
+
+      const resultado = await licenciaService.crearLicencia(nit, app, dias_demo);
+
+      expect(resultado.message).toBe("Licencia creada correctamente");
+      expect(mockLicenciaModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nit,
+          app,
+          estado: "demo",
+          dias_demo,
+        })
+      );
+    });
+
+    it("debe lanzar error ya_existe si el NIT ya está registrado", async () => {
+      const nit = "123456789";
+      const app = "mi-app";
+
+      mockLicenciaModel.findOne.mockResolvedValue({
+        id: 1,
+        nit,
+        app,
+      });
+
+      await expect(
+        licenciaService.crearLicencia(nit, app, 15)
+      ).rejects.toThrow("ya_existe");
     });
   });
 

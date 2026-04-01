@@ -3,6 +3,7 @@ const {
   activar,
   validar,
   generarOffline,
+  crear,
   verificarApiKey,
 } = require("../controllers/licenciaController");
 
@@ -16,5 +17,8 @@ router.post("/licencias/validar", validar);
 
 // POST /api/licencias/offline (protegido con API KEY)
 router.post("/licencias/offline", verificarApiKey, generarOffline);
+
+// POST /api/licencias/crear (protegido con API KEY - solo admin)
+router.post("/licencias/crear", verificarApiKey, crear);
 
 module.exports = router;

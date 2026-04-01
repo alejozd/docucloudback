@@ -16,7 +16,7 @@ const Licencia = (sequelize, DataTypes) => {
       },
       instalacion_hash: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,  // Permitir null hasta que se active la licencia
       },
       estado: {
         type: DataTypes.ENUM("demo", "activo", "bloqueado"),

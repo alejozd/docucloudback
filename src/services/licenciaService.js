@@ -14,36 +14,35 @@ const generarHash = (data) => {
   return crypto.createHash("sha256").update(data).digest("hex");
 };
 
-// Activar licencia (primera vez → demo)
+// Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app) => {
   try {
     // Buscar licencia por NIT
     let licencia = await Licencia.findOne({ where: { nit } });
 
+    // ❌ NUEVO COMPORTAMIENTO: Si no existe → error "no_autorizado"
     if (!licencia) {
-      // NO existe: crear con estado = 'demo'
-      const fechaActivacion = new Date();
-      const fechaExpiracion = new Date();
-      fechaExpiracion.setDate(fechaActivacion.getDate() + 15); // 15 días demo
+      throw new Error("no_autorizado");
+    }
 
-      licencia = await Licencia.create({
-        nit,
-        instalacion_hash,
-        estado: "demo",
-        fecha_activacion: fechaActivacion,
-        fecha_expiracion: fechaExpiracion,
-        dias_demo: 15,
-        app,
-      });
-
+    // 🔹 Manejo de instalación
+    if (!licencia.instalacion_hash) {
+      // Primera activación: asignar hash y fechas
+      licencia.instalacion_hash = instalacion_hash;
+      licencia.fecha_activacion = new Date();
+      licencia.fecha_expiracion = new Date(
+        Date.now() + licencia.dias_demo * 24 * 60 * 60 * 1000
+      );
+      await licencia.save();
+    } else if (licencia.instalacion_hash !== instalacion_hash) {
+      // Hash diferente → rechazar
       return {
-        estado: licencia.estado,
-        expira: licencia.fecha_expiracion,
-        dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+        error: "instalacion_invalida",
+        mensaje: "El hash de instalación no coincide con el registrado",
       };
     }
 
-    // Existe: validar si expiró → cambiar a 'bloqueado'
+    // 🔹 Validar expiración
     const ahora = new Date();
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
       licencia.estado = "bloqueado";
@@ -53,14 +52,6 @@ const activarLicencia = async (nit, instalacion_hash, app) => {
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
         mensaje: "licencia_expirada",
-      };
-    }
-
-    // Validar si instalacion_hash es diferente → rechazar
-    if (licencia.instalacion_hash !== instalacion_hash) {
-      return {
-        error: "instalacion_invalida",
-        mensaje: "El hash de instalación no coincide con el registrado",
       };
     }
 
@@ -155,10 +146,40 @@ const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
   }
 };
 
+// Crear licencia (solo admin) - SIN instalacion_hash aún
+const crearLicencia = async (nit, app, dias_demo = 15) => {
+  try {
+    // Validar si ya existe → error "ya_existe"
+    const licenciaExistente = await Licencia.findOne({ where: { nit } });
+
+    if (licenciaExistente) {
+      throw new Error("ya_existe");
+    }
+
+    // Crear registro SIN instalacion_hash
+    await Licencia.create({
+      nit,
+      app,
+      estado: "demo",
+      dias_demo,
+      // NO asignar fecha_activacion ni fecha_expiracion aún
+      // NO asignar instalacion_hash aún
+    });
+
+    return {
+      message: "Licencia creada correctamente",
+    };
+  } catch (error) {
+    console.error("Error en crearLicencia:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
   generarLicenciaOffline,
+  crearLicencia,
   calcularDiasRestantes,
   generarHash,
 };
