@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const Licencia = require("../models/Licencia");
+const { Licencia } = require("../models");
 
 // Helpers
 const calcularDiasRestantes = (fechaExpiracion) => {
