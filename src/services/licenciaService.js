@@ -250,12 +250,48 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
   }
 };
 
+// Generar código de licencia firmado con HMAC SHA256
+const generarCodigoLicencia = async (nit, app, dias) => {
+  try {
+    const SECRET = process.env.LICENSE_SECRET;
+
+    const fechaExp = new Date();
+    fechaExp.setDate(fechaExp.getDate() + dias);
+
+    const payload = {
+      nit,
+      app,
+      exp: fechaExp.toISOString(),
+    };
+
+    const payloadString = JSON.stringify(payload);
+
+    const payloadBase64 = Buffer.from(payloadString).toString("base64");
+
+    const firma = crypto
+      .createHmac("sha256", SECRET)
+      .update(payloadString)
+      .digest("hex");
+
+    const codigo = `${payloadBase64}.${firma}`;
+
+    return {
+      codigo,
+      payload,
+    };
+  } catch (error) {
+    console.error("Error generando licencia:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
   generarLicenciaOffline,
   crearLicencia,
   registrarLicencia,
+  generarCodigoLicencia,
   calcularDiasRestantes,
   generarHash,
   validarFirma,
