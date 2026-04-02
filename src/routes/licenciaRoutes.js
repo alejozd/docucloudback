@@ -5,6 +5,7 @@ const {
   generarOffline,
   crear,
   verificarApiKey,
+  registrar,
 } = require("../controllers/licenciaController");
 
 const router = express.Router();
@@ -20,5 +21,8 @@ router.post("/licencias/offline", verificarApiKey, generarOffline);
 
 // POST /api/licencias/crear (protegido con API KEY - solo admin)
 router.post("/licencias/crear", verificarApiKey, crear);
+
+// POST /api/licencias/registrar (registro con código firmado HMAC SHA256)
+router.post("/licencias/registrar", registrar);
 
 module.exports = router;

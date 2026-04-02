@@ -3,6 +3,7 @@ const {
   validarLicencia,
   generarLicenciaOffline,
   crearLicencia,
+  registrarLicencia,
 } = require("../services/licenciaService");
 
 // Controlador para activar licencia
@@ -173,10 +174,39 @@ const crear = async (req, res) => {
   }
 };
 
+// Controlador para registrar licencia con código firmado
+const registrar = async (req, res) => {
+  try {
+    const { nit, instalacion_hash, codigo } = req.body;
+
+    if (!nit || !instalacion_hash || !codigo) {
+      return res.status(400).json({
+        error: "campos_requeridos",
+        mensaje: "Los campos 'nit', 'instalacion_hash' y 'codigo' son requeridos",
+      });
+    }
+
+    const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
+
+    if (resultado.error) {
+      return res.status(400).json(resultado);
+    }
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error en registrar licencia:", error.message);
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+};
+
 module.exports = {
   activar,
   validar,
   generarOffline,
   crear,
   verificarApiKey,
+  registrar,
 };
