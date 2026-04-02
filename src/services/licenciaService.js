@@ -14,6 +14,25 @@ const generarHash = (data) => {
   return crypto.createHash("sha256").update(data).digest("hex");
 };
 
+// Validar firma HMAC SHA256
+const SECRET = process.env.LICENSE_SECRET;
+
+function validarFirma(payloadBase64, firma) {
+  const payload = Buffer.from(payloadBase64, "base64").toString("utf8");
+
+  const firmaCalculada = crypto
+    .createHmac("sha256", SECRET)
+    .update(payload)
+    .digest("hex");
+
+  return firmaCalculada === firma;
+}
+
+function decodificarPayload(payloadBase64) {
+  const json = Buffer.from(payloadBase64, "base64").toString("utf8");
+  return JSON.parse(json);
+}
+
 // Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app) => {
   try {
@@ -178,11 +197,103 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
   }
 };
 
+// Registrar licencia con código firmado HMAC SHA256
+const registrarLicencia = async (nit, instalacion_hash, codigo) => {
+  try {
+    // Separar payload y firma
+    const partes = codigo.split(".");
+    if (partes.length !== 2) {
+      return { error: "licencia_invalida", mensaje: "Formato de licencia inválido" };
+    }
+
+    const [payloadBase64, firma] = partes;
+
+    // Validar firma
+    if (!validarFirma(payloadBase64, firma)) {
+      return { error: "licencia_invalida", mensaje: "Firma inválida" };
+    }
+
+    // Decodificar payload
+    const data = decodificarPayload(payloadBase64);
+
+    if (data.nit !== nit) {
+      return { error: "licencia_invalida", mensaje: "El NIT no coincide con la licencia" };
+    }
+
+    // Buscar licencia existente
+    const licencia = await Licencia.findOne({ where: { nit } });
+
+    if (!licencia) {
+      return { error: "no_existe", mensaje: "No existe licencia para este NIT" };
+    }
+
+    // Validar hash
+    if (licencia.instalacion_hash !== instalacion_hash) {
+      return { error: "instalacion_invalida", mensaje: "El hash no coincide" };
+    }
+
+    // Actualizar licencia
+    licencia.estado = "activa";
+    licencia.fecha_expiracion = new Date(data.exp);
+    licencia.updated_at = new Date();
+
+    await licencia.save();
+
+    return {
+      estado: "activa",
+      expira: licencia.fecha_expiracion,
+      mensaje: "Licencia activada correctamente",
+    };
+  } catch (error) {
+    console.error("Error en registrarLicencia:", error.message);
+    return { error: "error_servidor", mensaje: error.message };
+  }
+};
+
+// Generar código de licencia firmado con HMAC SHA256
+const generarCodigoLicencia = async (nit, app, dias) => {
+  try {
+    const SECRET = process.env.LICENSE_SECRET;
+
+    const fechaExp = new Date();
+    fechaExp.setDate(fechaExp.getDate() + dias);
+
+    const payload = {
+      nit,
+      app,
+      exp: fechaExp.toISOString(),
+    };
+
+    const payloadString = JSON.stringify(payload);
+
+    const payloadBase64 = Buffer.from(payloadString).toString("base64");
+
+    const firma = crypto
+      .createHmac("sha256", SECRET)
+      .update(payloadString)
+      .digest("hex");
+
+    const codigo = `${payloadBase64}.${firma}`;
+
+    return {
+      codigo,
+      payload,
+    };
+  } catch (error) {
+    console.error("Error generando licencia:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
   generarLicenciaOffline,
   crearLicencia,
+  registrarLicencia,
+  generarCodigoLicencia,
   calcularDiasRestantes,
   generarHash,
+  validarFirma,
+  decodificarPayload,
 };
