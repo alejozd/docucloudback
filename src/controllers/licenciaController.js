@@ -206,7 +206,7 @@ const registrar = async (req, res) => {
 // Controlador para generar código de licencia firmado (admin)
 const generarCodigo = async (req, res) => {
   try {
-    const { nit, app, dias } = req.body;
+    const { nit, app, instalacion_hash, dias } = req.body;
 
     if (!nit || !app || !dias) {
       return res.status(400).json({
@@ -215,7 +215,14 @@ const generarCodigo = async (req, res) => {
       });
     }
 
-    const resultado = await generarCodigoLicencia(nit, app, dias);
+    if (!instalacion_hash) {
+      return res.status(400).json({
+        error: "campos_requeridos",
+        mensaje: "El campo 'instalacion_hash' es requerido",
+      });
+    }
+
+    const resultado = await generarCodigoLicencia(nit, app, instalacion_hash, dias);
 
     return res.status(200).json(resultado);
   } catch (error) {

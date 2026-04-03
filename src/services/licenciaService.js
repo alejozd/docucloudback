@@ -220,6 +220,11 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
       return { error: "licencia_invalida", mensaje: "El NIT no coincide con la licencia" };
     }
 
+    // Validar instalacion_hash si viene en el payload (nuevo campo)
+    if (data.instalacion_hash && data.instalacion_hash !== instalacion_hash) {
+      return { error: "instalacion_invalida", mensaje: "El hash de instalación no coincide" };
+    }
+
     // Buscar licencia existente
     const licencia = await Licencia.findOne({ where: { nit } });
 
@@ -251,7 +256,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 };
 
 // Generar código de licencia firmado con HMAC SHA256
-const generarCodigoLicencia = async (nit, app, dias) => {
+const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   try {
     const SECRET = process.env.LICENSE_SECRET;
 
@@ -261,8 +266,16 @@ const generarCodigoLicencia = async (nit, app, dias) => {
     const payload = {
       nit,
       app,
+      instalacion_hash,
       exp: fechaExp.toISOString(),
     };
+
+    // Logs para verificación
+    console.log("=== Generando código de licencia ===");
+    console.log("NIT:", nit);
+    console.log("Instalación Hash:", instalacion_hash);
+    console.log("Fecha de expiración:", fechaExp.toISOString());
+    console.log("=====================================");
 
     const payloadString = JSON.stringify(payload);
 
@@ -277,7 +290,6 @@ const generarCodigoLicencia = async (nit, app, dias) => {
 
     return {
       codigo,
-      payload,
     };
   } catch (error) {
     console.error("Error generando licencia:", error.message);
