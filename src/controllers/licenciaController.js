@@ -5,6 +5,7 @@ const {
   crearLicencia,
   registrarLicencia,
   generarCodigoLicencia,
+  activarOnline,
 } = require("../services/licenciaService");
 
 // Controlador para activar licencia
@@ -232,6 +233,44 @@ const generarCodigo = async (req, res) => {
   }
 };
 
+// Controlador para activar licencia online (registro automático)
+const activarEnLinea = async (req, res) => {
+  try {
+    const { nit, app, instalacion_hash } = req.body;
+
+    // Validaciones básicas
+    if (!nit || !instalacion_hash) {
+      return res.status(400).json({
+        error: "campos_requeridos",
+        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+      });
+    }
+
+    const resultado = await activarOnline(nit, app, instalacion_hash);
+
+    if (resultado.error) {
+      return res.status(400).json(resultado);
+    }
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error en activar licencia online:", error.message);
+    
+    // Manejar errores específicos
+    if (error.message === "no_autorizado") {
+      return res.status(401).json({
+        error: "no_autorizado",
+        mensaje: "No existe una licencia registrada para este NIT. Contacte al administrador.",
+      });
+    }
+    
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+};
+
 module.exports = {
   activar,
   validar,
@@ -240,4 +279,5 @@ module.exports = {
   verificarApiKey,
   registrar,
   generarCodigo,
+  activarEnLinea,
 };

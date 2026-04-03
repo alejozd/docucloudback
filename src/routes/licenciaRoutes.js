@@ -7,6 +7,7 @@ const {
   verificarApiKey,
   registrar,
   generarCodigo,
+  activarEnLinea,
 } = require("../controllers/licenciaController");
 
 const router = express.Router();
@@ -28,5 +29,8 @@ router.post("/licencias/registrar", registrar);
 
 // POST /api/licencias/generar-codigo (protegido con API KEY - solo admin)
 router.post("/licencias/generar-codigo", verificarApiKey, generarCodigo);
+
+// POST /api/licencia/activar-online (activación online sin exponer código)
+router.post("/licencia/activar-online", activarEnLinea);
 
 module.exports = router;
