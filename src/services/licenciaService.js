@@ -251,9 +251,14 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 };
 
 // Generar código de licencia firmado con HMAC SHA256
-const generarCodigoLicencia = async (nit, app, dias) => {
+const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   try {
     const SECRET = process.env.LICENSE_SECRET;
+
+    // Validar que instalacion_hash no venga vacío
+    if (!instalacion_hash || instalacion_hash.trim() === "") {
+      throw new Error("instalacion_hash_requerido");
+    }
 
     const fechaExp = new Date();
     fechaExp.setDate(fechaExp.getDate() + dias);
@@ -261,6 +266,7 @@ const generarCodigoLicencia = async (nit, app, dias) => {
     const payload = {
       nit,
       app,
+      instalacion_hash,
       exp: fechaExp.toISOString(),
     };
 
