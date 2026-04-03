@@ -294,6 +294,60 @@ const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   }
 };
 
+// Activar licencia online - registro automático sin exponer el código
+const activarOnline = async (nit, app, instalacion_hash) => {
+  try {
+    // 1. Buscar licencia por NIT
+    let licencia = await Licencia.findOne({ where: { nit } });
+
+    // Si no existe → error "no_autorizado"
+    if (!licencia) {
+      throw new Error("no_autorizado");
+    }
+
+    // 2. Validar o asignar instalacion_hash
+    if (!licencia.instalacion_hash) {
+      // Primera activación: asignar hash
+      licencia.instalacion_hash = instalacion_hash;
+      await licencia.save();
+    } else if (licencia.instalacion_hash !== instalacion_hash) {
+      // Hash diferente → error
+      return {
+        error: "instalacion_invalida",
+        mensaje: "El hash de instalación no coincide con el registrado",
+      };
+    }
+
+    // 3. Obtener días demo de la licencia
+    const dias = licencia.dias_demo || 15;
+
+    // 4. Generar código de licencia internamente
+    const { codigo } = await generarCodigoLicencia(
+      nit,
+      app || licencia.app,
+      instalacion_hash,
+      dias
+    );
+
+    // 5. Registrar la licencia usando el código generado (sin exponerlo)
+    const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
+
+    if (resultado.error) {
+      return resultado;
+    }
+
+    // 6. Retornar solo estado, expira y dias_restantes (sin exponer el código)
+    return {
+      estado: resultado.estado,
+      expira: licencia.fecha_expiracion,
+      dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+    };
+  } catch (error) {
+    console.error("Error en activarOnline:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
@@ -305,4 +359,5 @@ module.exports = {
   generarHash,
   validarFirma,
   decodificarPayload,
+  activarOnline,
 };
