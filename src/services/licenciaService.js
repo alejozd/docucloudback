@@ -228,7 +228,10 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     }
 
     // Validar hash
-    if (licencia.instalacion_hash !== instalacion_hash) {
+    if (!licencia.instalacion_hash) {
+      // Primera activación: asignar hash
+      licencia.instalacion_hash = instalacion_hash;
+    } else if (licencia.instalacion_hash !== instalacion_hash) {
       return { error: "instalacion_invalida", mensaje: "El hash no coincide" };
     }
 
