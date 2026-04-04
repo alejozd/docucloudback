@@ -293,13 +293,15 @@ const convertir = async (req, res) => {
       });
     }
 
-    if (!['anual', 'permanente'].includes(tipo_licencia)) {
+    // Validar que tipo_licencia sea uno de: 'demo', 'anual', 'permanente'
+    if (!['demo', 'anual', 'permanente'].includes(tipo_licencia)) {
       return res.status(400).json({
         error: "valor_invalido",
-        mensaje: "El campo 'tipo_licencia' debe ser 'anual' o 'permanente'",
+        mensaje: "El campo 'tipo_licencia' debe ser 'demo', 'anual' o 'permanente'",
       });
     }
 
+    // dias_licencia es requerido solo si tipo es 'anual'
     if (tipo_licencia === 'anual' && (!dias_licencia || typeof dias_licencia !== 'number' || dias_licencia <= 0)) {
       return res.status(400).json({
         error: "valor_invalido",
@@ -324,7 +326,7 @@ const convertir = async (req, res) => {
     if (error.message === "tipo_invalido") {
       return res.status(400).json({
         error: "tipo_invalido",
-        mensaje: "El tipo de licencia debe ser 'anual' o 'permanente'",
+        mensaje: "El tipo de licencia debe ser 'demo', 'anual' o 'permanente'",
       });
     }
     
