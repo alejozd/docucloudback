@@ -175,13 +175,14 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
       throw new Error("ya_existe");
     }
 
-    // Crear registro SIN instalacion_hash (se asignará null explícitamente)
-    // Esto evita el error "Field 'instalacion_hash' doesn't have a default value"
+    // Crear registro con valores por defecto para licencia demo
     await Licencia.create({
       nit,
       app,
-      estado: "demo",
+      estado: 'demo',
+      tipo_licencia: 'demo',
       dias_demo,
+      dias_licencia: null,
       instalacion_hash: null,
       fecha_activacion: null,
       fecha_expiracion: null,
@@ -337,7 +338,22 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       dias = null;
     }
 
-    // 4. Generar código de licencia internamente
+    // 4. Calcular fecha_expiracion SIEMPRE si tipo_licencia ≠ 'demo'
+    if (tipoLicencia !== 'demo') {
+      licencia.estado = 'activa';
+      
+      if (esPermanente) {
+        licencia.fecha_expiracion = null;
+      } else {
+        // anual → calcular desde hoy + dias_licencia
+        licencia.fecha_expiracion = new Date();
+        licencia.fecha_expiracion.setDate(licencia.fecha_expiracion.getDate() + dias);
+      }
+      
+      await licencia.save();
+    }
+
+    // 5. Generar código de licencia internamente
     const { codigo } = await generarCodigoLicencia(
       nit,
       app || licencia.app,
@@ -345,14 +361,14 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       dias
     );
 
-    // 5. Registrar la licencia usando el código generado (sin exponerlo)
+    // 6. Registrar la licencia usando el código generado (sin exponerlo)
     const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
 
     if (resultado.error) {
       return resultado;
     }
 
-    // 6. Retornar solo estado, expira y dias_restantes (sin exponer el código)
+    // 7. Retornar solo estado, expira y dias_restantes (sin exponer el código)
     // Si es permanente, no hay fecha de expiración y dias_restantes es null
     return {
       estado: resultado.estado,
@@ -361,6 +377,51 @@ const activarOnline = async (nit, app, instalacion_hash) => {
     };
   } catch (error) {
     console.error("Error en activarOnline:", error.message);
+    throw error;
+  }
+};
+
+// Convertir licencia demo a real (anual o permanente)
+const convertirLicencia = async (nit, tipo_licencia, dias_licencia) => {
+  try {
+    // Buscar licencia por NIT
+    const licencia = await Licencia.findOne({ where: { nit } });
+
+    if (!licencia) {
+      throw new Error("no_existe");
+    }
+
+    // Validar tipo de licencia
+    if (!['anual', 'permanente'].includes(tipo_licencia)) {
+      throw new Error("tipo_invalido");
+    }
+
+    // Si es anual, validar que dias_licencia sea un número positivo
+    if (tipo_licencia === 'anual' && (!dias_licencia || typeof dias_licencia !== 'number' || dias_licencia <= 0)) {
+      throw new Error("dias_requeridos");
+    }
+
+    // Actualizar tipo de licencia
+    licencia.tipo_licencia = tipo_licencia;
+
+    // Asignar dias_licencia según el tipo
+    if (tipo_licencia === 'anual') {
+      licencia.dias_licencia = dias_licencia;
+    } else {
+      // Permanente → dias_licencia = null
+      licencia.dias_licencia = null;
+    }
+
+    // Resetear fecha_expiracion a null (se regenerará en próxima activación)
+    licencia.fecha_expiracion = null;
+
+    await licencia.save();
+
+    return {
+      message: "Licencia actualizada correctamente",
+    };
+  } catch (error) {
+    console.error("Error en convertirLicencia:", error.message);
     throw error;
   }
 };
@@ -377,4 +438,5 @@ module.exports = {
   validarFirma,
   decodificarPayload,
   activarOnline,
+  convertirLicencia,
 };
