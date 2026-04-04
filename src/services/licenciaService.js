@@ -243,8 +243,11 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 
     // Actualizar licencia
     licencia.estado = "activa";
-    // Si data.exp existe, establecer fecha_expiracion; si es null/undefined, dejar null (licencia permanente)
-    licencia.fecha_expiracion = data.exp ? new Date(data.exp) : null;
+    // Solo actualizar fecha_expiracion si viene en el payload y no es null
+    // Esto permite que activarOnline controle el cálculo de fecha_expiracion
+    if (data.exp) {
+      licencia.fecha_expiracion = new Date(data.exp);
+    }
     licencia.updated_at = new Date();
 
     await licencia.save();
@@ -320,7 +323,6 @@ const activarOnline = async (nit, app, instalacion_hash) => {
     if (!licencia.instalacion_hash) {
       // Primera activación: asignar hash
       licencia.instalacion_hash = instalacion_hash;
-      await licencia.save();
     } else if (licencia.instalacion_hash !== instalacion_hash) {
       // Hash diferente → error
       return {
@@ -329,7 +331,7 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       };
     }
 
-    // 3. Determinar los días según el tipo de licencia
+    // 3. Determinar los días y fecha_expiracion según el tipo de licencia
     const tipoLicencia = licencia.tipo_licencia || 'demo';
     let dias;
     let esPermanente = false;
@@ -343,20 +345,20 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       dias = null;
     }
 
-    // 4. Calcular fecha_expiracion SIEMPRE si tipo_licencia ≠ 'demo'
-    if (tipoLicencia !== 'demo') {
-      licencia.estado = 'activa';
-      
-      if (esPermanente) {
-        licencia.fecha_expiracion = null;
-      } else {
-        // anual → calcular desde hoy + dias_licencia
-        licencia.fecha_expiracion = new Date();
-        licencia.fecha_expiracion.setDate(licencia.fecha_expiracion.getDate() + dias);
-      }
-      
-      await licencia.save();
+    // 4. SIEMPRE actualizar fecha_activacion y recalcular fecha_expiracion según tipo_licencia
+    licencia.fecha_activacion = new Date();
+    licencia.estado = 'activa';
+
+    if (esPermanente) {
+      // permanente → fecha_expiracion = null
+      licencia.fecha_expiracion = null;
+    } else {
+      // demo o anual → calcular desde hoy + dias correspondientes
+      licencia.fecha_expiracion = new Date();
+      licencia.fecha_expiracion.setDate(licencia.fecha_expiracion.getDate() + dias);
     }
+
+    await licencia.save();
 
     // 5. Generar código de licencia internamente
     const { codigo } = await generarCodigoLicencia(
