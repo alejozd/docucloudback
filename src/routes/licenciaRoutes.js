@@ -10,9 +10,76 @@ const {
   activarEnLinea,
   convertir,
 } = require("../controllers/licenciaController");
-const { obtenerEstado } = require("../services/licenciaService");
+const { obtenerEstado, listarLicencias, editarLicencia } = require("../services/licenciaService");
+const { authenticateToken } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
+
+// GET /api/licencias/listado (protegido con JWT)
+router.get("/licencias/listado", authenticateToken, async (req, res) => {
+  try {
+    console.log("[GET /api/licencias/listado] Listando todas las licencias");
+    
+    const licencias = await listarLicencias();
+    
+    return res.status(200).json({
+      ok: true,
+      licencias,
+    });
+  } catch (error) {
+    console.error("Error en listar licencias:", error.message);
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+});
+
+// PUT /api/licencias/editar/:id (protegido con JWT)
+router.put("/licencias/editar/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const datos = req.body;
+    
+    console.log(`[PUT /api/licencias/editar/${id}] Editando licencia`);
+    
+    // Validar que se reciban datos en el body
+    if (!datos || Object.keys(datos).length === 0) {
+      return res.status(400).json({
+        error: "datos_requeridos",
+        mensaje: "El body de la solicitud no puede estar vacío",
+      });
+    }
+    
+    // Validar que id sea un número válido
+    const idNum = parseInt(id, 10);
+    if (isNaN(idNum)) {
+      return res.status(400).json({
+        error: "id_invalido",
+        mensaje: "El ID de la licencia debe ser un número válido",
+      });
+    }
+    
+    const resultado = await editarLicencia(idNum, datos);
+    
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error en editar licencia:", error.message);
+    
+    // Manejar errores específicos
+    if (error.message === "no_existe") {
+      return res.status(404).json({
+        error: "no_existe",
+        mensaje: "No existe una licencia con ese ID",
+      });
+    }
+    
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+});
 
 // GET /api/licencia/estado
 router.get("/licencia/estado", async (req, res) => {

@@ -566,6 +566,65 @@ const obtenerEstado = async (nit, instalacion_hash) => {
   }
 };
 
+// Listar todas las licencias
+const listarLicencias = async () => {
+  try {
+    const licencias = await Licencia.findAll({
+      order: [['created_at', 'DESC']],
+    });
+    return licencias;
+  } catch (error) {
+    console.error("Error en listarLicencias:", error.message);
+    throw error;
+  }
+};
+
+// Editar una licencia existente
+const editarLicencia = async (id, datos) => {
+  try {
+    // Buscar la licencia por ID
+    const licencia = await Licencia.findByPk(id);
+    
+    if (!licencia) {
+      throw new Error("no_existe");
+    }
+
+    // Campos que se pueden actualizar (excluyendo id y created_at)
+    const camposPermitidos = [
+      'nit',
+      'instalacion_hash',
+      'estado',
+      'fecha_activacion',
+      'fecha_expiracion',
+      'dias_demo',
+      'ultima_validacion',
+      'app',
+      'tipo_licencia',
+      'dias_licencia'
+    ];
+
+    // Construir objeto de actualización solo con campos permitidos
+    const datosActualizacion = {};
+    for (const campo of camposPermitidos) {
+      if (datos[campo] !== undefined) {
+        datosActualizacion[campo] = datos[campo];
+      }
+    }
+
+    // Ejecutar actualización
+    await licencia.update(datosActualizacion);
+    
+    return {
+      ok: true,
+      mensaje: "Licencia actualizada correctamente",
+      licencia,
+    };
+  } catch (error) {
+    console.error("Error en editarLicencia:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
@@ -580,4 +639,6 @@ module.exports = {
   activarOnline,
   convertirLicencia,
   obtenerEstado,
+  listarLicencias,
+  editarLicencia,
 };
