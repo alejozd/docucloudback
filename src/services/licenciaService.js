@@ -401,15 +401,8 @@ const activarOnline = async (nit, app, instalacion_hash) => {
 };
 
 // Convertir licencia demo a real (anual o permanente)
-const convertirLicencia = async (nit, tipo_licencia, dias_licencia) => {
+const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_hash) => {
   try {
-    // Buscar licencia por NIT
-    const licencia = await Licencia.findOne({ where: { nit } });
-
-    if (!licencia) {
-      throw new Error("no_existe");
-    }
-
     // Validar tipo de licencia
     if (!['anual', 'permanente'].includes(tipo_licencia)) {
       throw new Error("tipo_invalido");
@@ -420,24 +413,56 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia) => {
       throw new Error("dias_requeridos");
     }
 
-    // Actualizar tipo de licencia
-    licencia.tipo_licencia = tipo_licencia;
+    // Construir filtro: siempre usa nit, opcionalmente instalacion_hash si aplica
+    const whereClause = { nit };
+    if (instalacion_hash) {
+      whereClause.instalacion_hash = instalacion_hash;
+    }
+
+    // Preparar campos a actualizar
+    const updateData = {
+      tipo_licencia,
+      estado: 'activa',
+    };
 
     // Asignar dias_licencia según el tipo
     if (tipo_licencia === 'anual') {
-      licencia.dias_licencia = dias_licencia;
+      updateData.dias_licencia = dias_licencia;
+      updateData.fecha_expiracion = null; // Se regenerará en próxima activación
     } else {
       // Permanente → dias_licencia = null
-      licencia.dias_licencia = null;
+      updateData.dias_licencia = null;
+      updateData.fecha_expiracion = null;
     }
 
-    // Resetear fecha_expiracion a null (se regenerará en próxima activación)
-    licencia.fecha_expiracion = null;
+    // Ejecutar UPDATE directo y obtener filas afectadas
+    const [filasAfectadas] = await Licencia.update(updateData, {
+      where: whereClause,
+      returning: true, // Para PostgreSQL, retorna registros actualizados
+    });
 
-    await licencia.save();
+    // Loggear el resultado del UPDATE
+    console.log(`[convertirLicencia] UPDATE ejecutado - NIT: ${nit}, Filas afectadas: ${filasAfectadas}, Datos:`, updateData);
+
+    // Verificar que se haya afectado al menos 1 fila
+    if (filasAfectadas === 0) {
+      throw new Error("no_existe");
+    }
+
+    // Obtener datos actualizados para retornar en la respuesta
+    const licenciaActualizada = await Licencia.findOne({ where: { nit } });
 
     return {
-      message: "Licencia actualizada correctamente",
+      message: "Licencia convertida correctamente",
+      filas_afectadas: filasAfectadas,
+      datos_actualizados: {
+        nit: licenciaActualizada.nit,
+        tipo_licencia: licenciaActualizada.tipo_licencia,
+        dias_licencia: licenciaActualizada.dias_licencia,
+        estado: licenciaActualizada.estado,
+        fecha_expiracion: licenciaActualizada.fecha_expiracion,
+        instalacion_hash: licenciaActualizada.instalacion_hash,
+      },
     };
   } catch (error) {
     console.error("Error en convertirLicencia:", error.message);
