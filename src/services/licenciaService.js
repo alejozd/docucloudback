@@ -365,6 +365,51 @@ const activarOnline = async (nit, app, instalacion_hash) => {
   }
 };
 
+// Convertir licencia demo a real (anual o permanente)
+const convertirLicencia = async (nit, tipo_licencia, dias_licencia) => {
+  try {
+    // Buscar licencia por NIT
+    const licencia = await Licencia.findOne({ where: { nit } });
+
+    if (!licencia) {
+      throw new Error("no_existe");
+    }
+
+    // Validar tipo de licencia
+    if (!['anual', 'permanente'].includes(tipo_licencia)) {
+      throw new Error("tipo_invalido");
+    }
+
+    // Si es anual, validar que dias_licencia sea un número positivo
+    if (tipo_licencia === 'anual' && (!dias_licencia || typeof dias_licencia !== 'number' || dias_licencia <= 0)) {
+      throw new Error("dias_requeridos");
+    }
+
+    // Actualizar tipo de licencia
+    licencia.tipo_licencia = tipo_licencia;
+
+    // Asignar dias_licencia según el tipo
+    if (tipo_licencia === 'anual') {
+      licencia.dias_licencia = dias_licencia;
+    } else {
+      // Permanente → dias_licencia = null
+      licencia.dias_licencia = null;
+    }
+
+    // Resetear fecha_expiracion a null (se regenerará en próxima activación)
+    licencia.fecha_expiracion = null;
+
+    await licencia.save();
+
+    return {
+      message: "Licencia actualizada correctamente",
+    };
+  } catch (error) {
+    console.error("Error en convertirLicencia:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
@@ -377,4 +422,5 @@ module.exports = {
   validarFirma,
   decodificarPayload,
   activarOnline,
+  convertirLicencia,
 };

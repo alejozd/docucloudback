@@ -44,6 +44,15 @@ const Licencia = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      tipo_licencia: {
+        type: DataTypes.ENUM('demo', 'anual', 'permanente'),
+        allowNull: false,
+        defaultValue: 'demo',
+      },
+      dias_licencia: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       tableName: "licencias",

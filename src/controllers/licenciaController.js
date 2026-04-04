@@ -6,6 +6,7 @@ const {
   registrarLicencia,
   generarCodigoLicencia,
   activarOnline,
+  convertirLicencia,
 } = require("../services/licenciaService");
 
 // Controlador para activar licencia
@@ -271,6 +272,75 @@ const activarEnLinea = async (req, res) => {
   }
 };
 
+// Controlador para convertir licencia demo a real (anual o permanente)
+const convertir = async (req, res) => {
+  try {
+    const { nit, tipo_licencia, dias_licencia } = req.body;
+
+    // Validaciones básicas
+    if (!nit) {
+      return res.status(400).json({
+        error: "campo_requerido",
+        mensaje: "El campo 'nit' es requerido",
+      });
+    }
+
+    if (!tipo_licencia) {
+      return res.status(400).json({
+        error: "campo_requerido",
+        mensaje: "El campo 'tipo_licencia' es requerido",
+      });
+    }
+
+    if (!['anual', 'permanente'].includes(tipo_licencia)) {
+      return res.status(400).json({
+        error: "valor_invalido",
+        mensaje: "El campo 'tipo_licencia' debe ser 'anual' o 'permanente'",
+      });
+    }
+
+    if (tipo_licencia === 'anual' && (!dias_licencia || typeof dias_licencia !== 'number' || dias_licencia <= 0)) {
+      return res.status(400).json({
+        error: "valor_invalido",
+        mensaje: "El campo 'dias_licencia' es requerido y debe ser un número positivo cuando el tipo es 'anual'",
+      });
+    }
+
+    const resultado = await convertirLicencia(nit, tipo_licencia, dias_licencia);
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error en convertir licencia:", error.message);
+    
+    // Manejar errores específicos
+    if (error.message === "no_existe") {
+      return res.status(404).json({
+        error: "no_existe",
+        mensaje: "No existe una licencia registrada para este NIT",
+      });
+    }
+    
+    if (error.message === "tipo_invalido") {
+      return res.status(400).json({
+        error: "tipo_invalido",
+        mensaje: "El tipo de licencia debe ser 'anual' o 'permanente'",
+      });
+    }
+    
+    if (error.message === "dias_requeridos") {
+      return res.status(400).json({
+        error: "dias_requeridos",
+        mensaje: "El campo 'dias_licencia' es requerido para licencias anuales",
+      });
+    }
+    
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+};
+
 module.exports = {
   activar,
   validar,
@@ -280,4 +350,5 @@ module.exports = {
   registrar,
   generarCodigo,
   activarEnLinea,
+  convertir,
 };
