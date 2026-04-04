@@ -235,9 +235,10 @@ const generarCodigo = async (req, res) => {
 };
 
 // Controlador para activar licencia online (registro automático)
+// Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 const activarEnLinea = async (req, res) => {
   try {
-    const { nit, app, instalacion_hash } = req.body;
+    const { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia } = req.body;
 
     // Validaciones básicas
     if (!nit || !instalacion_hash) {
@@ -247,7 +248,7 @@ const activarEnLinea = async (req, res) => {
       });
     }
 
-    const resultado = await activarOnline(nit, app, instalacion_hash);
+    const resultado = await activarOnline(nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia);
 
     if (resultado.error) {
       return res.status(400).json(resultado);
