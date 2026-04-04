@@ -68,16 +68,20 @@ const activarLicencia = async (nit, instalacion_hash, app) => {
       await licencia.save();
       return {
         estado: "bloqueado",
+        tipo_licencia: licencia.tipo_licencia || 'demo',
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
+        instalacion_hash: licencia.instalacion_hash,
         mensaje: "licencia_expirada",
       };
     }
 
     return {
       estado: licencia.estado,
+      tipo_licencia: licencia.tipo_licencia || 'demo',
       expira: licencia.fecha_expiracion,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+      instalacion_hash: licencia.instalacion_hash,
     };
   } catch (error) {
     console.error("Error en activarLicencia:", error.message);
@@ -119,8 +123,10 @@ const validarLicencia = async (nit, instalacion_hash) => {
       await licencia.save();
       return {
         estado: "bloqueado",
+        tipo_licencia: licencia.tipo_licencia || 'demo',
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
+        instalacion_hash: licencia.instalacion_hash,
         mensaje: "licencia_expirada",
       };
     }
@@ -131,8 +137,10 @@ const validarLicencia = async (nit, instalacion_hash) => {
 
     return {
       estado: licencia.estado,
+      tipo_licencia: licencia.tipo_licencia || 'demo',
       expira: licencia.fecha_expiracion,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+      instalacion_hash: licencia.instalacion_hash,
     };
   } catch (error) {
     console.error("Error en validarLicencia:", error.message);
@@ -254,7 +262,9 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 
     return {
       estado: "activa",
+      tipo_licencia: licencia.tipo_licencia || 'demo',
       expira: licencia.fecha_expiracion,
+      instalacion_hash: licencia.instalacion_hash,
       mensaje: "Licencia activada correctamente",
     };
   } catch (error) {
@@ -379,8 +389,10 @@ const activarOnline = async (nit, app, instalacion_hash) => {
     // Si es permanente, no hay fecha de expiración y dias_restantes es null
     return {
       estado: resultado.estado,
+      tipo_licencia: licencia.tipo_licencia || 'demo',
       expira: esPermanente ? null : licencia.fecha_expiracion,
       dias_restantes: esPermanente ? null : calcularDiasRestantes(licencia.fecha_expiracion),
+      instalacion_hash: licencia.instalacion_hash,
     };
   } catch (error) {
     console.error("Error en activarOnline:", error.message);
@@ -433,6 +445,65 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia) => {
   }
 };
 
+// Obtener estado de la licencia
+const obtenerEstado = async (nit, instalacion_hash) => {
+  try {
+    // Buscar licencia
+    const licencia = await Licencia.findOne({ where: { nit } });
+
+    // Si no existe → error "no_autorizado"
+    if (!licencia) {
+      return {
+        error: "no_autorizado",
+        mensaje: "No existe licencia registrada para este NIT",
+      };
+    }
+
+    // 🔹 Manejo de instalación
+    if (!licencia.instalacion_hash) {
+      // Primera consulta: asignar hash y guardar
+      licencia.instalacion_hash = instalacion_hash;
+      await licencia.save();
+    } else if (licencia.instalacion_hash !== instalacion_hash) {
+      // Hash diferente → rechazar
+      return {
+        error: "instalacion_invalida",
+        mensaje: "El hash de instalación no coincide con el registrado",
+      };
+    }
+
+    // Si expiró → estado = bloqueado
+    const ahora = new Date();
+    if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
+      licencia.estado = "bloqueado";
+      await licencia.save();
+      return {
+        estado: "bloqueado",
+        tipo_licencia: licencia.tipo_licencia || 'demo',
+        expira: licencia.fecha_expiracion,
+        dias_restantes: 0,
+        instalacion_hash: licencia.instalacion_hash,
+        mensaje: "licencia_expirada",
+      };
+    }
+
+    // Actualizar ultima_validacion = now
+    licencia.ultima_validacion = ahora;
+    await licencia.save();
+
+    return {
+      estado: licencia.estado,
+      tipo_licencia: licencia.tipo_licencia || 'demo',
+      expira: licencia.fecha_expiracion,
+      dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+      instalacion_hash: licencia.instalacion_hash,
+    };
+  } catch (error) {
+    console.error("Error en obtenerEstado:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   activarLicencia,
   validarLicencia,
@@ -446,4 +517,5 @@ module.exports = {
   decodificarPayload,
   activarOnline,
   convertirLicencia,
+  obtenerEstado,
 };

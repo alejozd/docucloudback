@@ -10,8 +10,40 @@ const {
   activarEnLinea,
   convertir,
 } = require("../controllers/licenciaController");
+const { obtenerEstado } = require("../services/licenciaService");
 
 const router = express.Router();
+
+// GET /api/licencia/estado
+router.get("/licencia/estado", async (req, res) => {
+  try {
+    const { nit, instalacion_hash } = req.query;
+
+    // Validaciones básicas
+    if (!nit || !instalacion_hash) {
+      return res.status(400).json({
+        error: "campos_requeridos",
+        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+      });
+    }
+
+    const resultado = await obtenerEstado(nit, instalacion_hash);
+
+    if (resultado.error) {
+      const statusCode =
+        resultado.error === "no_autorizado" ? 401 : 400;
+      return res.status(statusCode).json(resultado);
+    }
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error en obtener estado de licencia:", error.message);
+    return res.status(500).json({
+      error: "error_servidor",
+      mensaje: error.message,
+    });
+  }
+});
 
 // POST /api/licencias/activar
 router.post("/licencias/activar", activar);
