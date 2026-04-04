@@ -99,8 +99,13 @@ const validarLicencia = async (nit, instalacion_hash) => {
       };
     }
 
-    // Si instalacion_hash no coincide → error
-    if (licencia.instalacion_hash !== instalacion_hash) {
+    // 🔹 Manejo de instalación
+    if (!licencia.instalacion_hash) {
+      // Primera validación: asignar hash y guardar
+      licencia.instalacion_hash = instalacion_hash;
+      await licencia.save();
+    } else if (licencia.instalacion_hash !== instalacion_hash) {
+      // Hash diferente → rechazar
       return {
         error: "instalacion_invalida",
         mensaje: "El hash de instalación no coincide con el registrado",
