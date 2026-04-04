@@ -115,18 +115,50 @@ describe("Licencia Service", () => {
   });
 
   describe("validarLicencia", () => {
-    it("debe retornar error no_autorizado si no existe licencia", async () => {
+    it("debe crear automáticamente una licencia DEMO si no existe", async () => {
       const nit = "999999999";
       const instalacion_hash = "hash-instalacion-1";
+      const app = "mi-app";
+
+      const fechaExpiracionEsperada = new Date();
+      fechaExpiracionEsperada.setDate(fechaExpiracionEsperada.getDate() + 15);
 
       mockLicenciaModel.findOne.mockResolvedValue(null);
+      
+      const nuevaLicencia = {
+        id: 1,
+        nit,
+        app,
+        estado: "demo",
+        tipo_licencia: "demo",
+        dias_demo: 15,
+        instalacion_hash,
+        fecha_activacion: new Date(),
+        fecha_expiracion: fechaExpiracionEsperada,
+        ultima_validacion: new Date(),
+        save: jest.fn().mockResolvedValue(true),
+      };
+      
+      mockLicenciaModel.create.mockResolvedValue(nuevaLicencia);
 
       const resultado = await licenciaService.validarLicencia(
         nit,
-        instalacion_hash
+        instalacion_hash,
+        app
       );
 
-      expect(resultado.error).toBe("no_autorizado");
+      expect(mockLicenciaModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nit,
+          app: app || 'desconocido',
+          estado: 'demo',
+          tipo_licencia: 'demo',
+          dias_demo: 15,
+          instalacion_hash,
+        })
+      );
+      expect(resultado.estado).toBe("demo");
+      expect(resultado.tipo_licencia).toBe("demo");
     });
 
     it("debe validar correctamente una licencia activa", async () => {
