@@ -175,13 +175,14 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
       throw new Error("ya_existe");
     }
 
-    // Crear registro SIN instalacion_hash (se asignará null explícitamente)
-    // Esto evita el error "Field 'instalacion_hash' doesn't have a default value"
+    // Crear registro con valores por defecto para licencia demo
     await Licencia.create({
       nit,
       app,
-      estado: "demo",
+      estado: 'demo',
+      tipo_licencia: 'demo',
       dias_demo,
+      dias_licencia: null,
       instalacion_hash: null,
       fecha_activacion: null,
       fecha_expiracion: null,
