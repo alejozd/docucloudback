@@ -8,7 +8,6 @@ const {
   registrar,
   generarCodigo,
   activarEnLinea,
-  convertir,
 } = require("../controllers/licenciaController");
 const { obtenerEstado } = require("../services/licenciaService");
 
@@ -64,9 +63,7 @@ router.post("/licencias/registrar", registrar);
 router.post("/licencias/generar-codigo", verificarApiKey, generarCodigo);
 
 // POST /api/licencia/activar-online (activación online sin exponer código)
+// Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 router.post("/licencias/activar-online", activarEnLinea);
-
-// POST /api/licencias/convertir (protegido con API KEY - convertir demo a real)
-router.post("/licencias/convertir", verificarApiKey, convertir);
 
 module.exports = router;

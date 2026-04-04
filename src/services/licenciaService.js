@@ -319,79 +319,97 @@ const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
 };
 
 // Activar licencia online - registro automático sin exponer el código
-const activarOnline = async (nit, app, instalacion_hash) => {
+// Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
+const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia) => {
   try {
     // 1. Buscar licencia por NIT
     let licencia = await Licencia.findOne({ where: { nit } });
 
-    // Si no existe → error "no_autorizado"
+    // Si no existe → crear automáticamente una en modo demo
     if (!licencia) {
-      throw new Error("no_autorizado");
+      console.log(`[activarOnline] No existe licencia para NIT: ${nit}. Creando nueva licencia demo.`);
+      const diasDemo = dias_demo || 15;
+      
+      licencia = await Licencia.create({
+        nit,
+        app: app || 'desconocido',
+        estado: 'demo',
+        tipo_licencia: 'demo',
+        dias_demo: diasDemo,
+        dias_licencia: null,
+        instalacion_hash: null,
+        fecha_activacion: null,
+        fecha_expiracion: null,
+        ultima_validacion: null
+      });
+      
+      console.log(`[activarOnline] Licencia demo creada para NIT: ${nit}, días_demo: ${diasDemo}`);
     }
 
     // 2. Validar o asignar instalacion_hash
     if (!licencia.instalacion_hash) {
       // Primera activación: asignar hash
       licencia.instalacion_hash = instalacion_hash;
+      console.log(`[activarOnline] Asignado instalacion_hash para NIT: ${nit}`);
     } else if (licencia.instalacion_hash !== instalacion_hash) {
       // Hash diferente → error
+      console.warn(`[activarOnline] Hash no coincide para NIT: ${nit}`);
       return {
         error: "instalacion_invalida",
         mensaje: "El hash de instalación no coincide con el registrado",
       };
     }
 
-    // 3. Determinar los días y fecha_expiracion según el tipo de licencia
-    const tipoLicencia = licencia.tipo_licencia || 'demo';
-    let dias;
-    let esPermanente = false;
+    // 3. Leer configuración de la licencia
+    const tipoLicenciaConfig = tipo_licencia || licencia.tipo_licencia || 'demo';
+    const diasDemoConfig = dias_demo !== undefined ? dias_demo : licencia.dias_demo;
+    const diasLicenciaConfig = dias_licencia !== undefined ? dias_licencia : licencia.dias_licencia;
 
-    if (tipoLicencia === 'demo') {
-      dias = licencia.dias_demo || 15;
-    } else if (tipoLicencia === 'anual') {
-      dias = licencia.dias_licencia || 365;
-    } else if (tipoLicencia === 'permanente') {
-      esPermanente = true;
-      dias = null;
+    console.log(`[activarOnline] Tipo de licencia detectado: ${tipoLicenciaConfig}`);
+
+    // 4. Aplicar lógica según tipo_licencia
+    const ahora = new Date();
+    let fechaExpiracion = null;
+    let diasAplicados = 0;
+
+    if (tipoLicenciaConfig === 'demo') {
+      diasAplicados = diasDemoConfig || 15;
+      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+      console.log(`[activarOnline] Licencia DEMO - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+    } else if (tipoLicenciaConfig === 'anual') {
+      diasAplicados = diasLicenciaConfig || 365;
+      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+      console.log(`[activarOnline] Licencia ANUAL - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+    } else if (tipoLicenciaConfig === 'permanente') {
+      fechaExpiracion = null;
+      console.log(`[activarOnline] Licencia PERMANENTE - Sin expiración`);
     }
 
-    // 4. SIEMPRE actualizar fecha_activacion y recalcular fecha_expiracion según tipo_licencia
-    licencia.fecha_activacion = new Date();
-    licencia.estado = 'activa';
+    // 5. Actualizar campos de la licencia
+    licencia.tipo_licencia = tipoLicenciaConfig;
+    licencia.fecha_activacion = ahora;
+    licencia.fecha_expiracion = fechaExpiracion;
+    licencia.estado = 'activo';
+    licencia.ultima_validacion = ahora;
 
-    if (esPermanente) {
-      // permanente → fecha_expiracion = null
-      licencia.fecha_expiracion = null;
-    } else {
-      // demo o anual → calcular desde hoy + dias correspondientes
-      licencia.fecha_expiracion = new Date();
-      licencia.fecha_expiracion.setDate(licencia.fecha_expiracion.getDate() + dias);
+    // Guardar dias_demo y dias_licencia según corresponda
+    if (dias_demo !== undefined) {
+      licencia.dias_demo = dias_demo;
+    }
+    if (dias_licencia !== undefined) {
+      licencia.dias_licencia = dias_licencia;
     }
 
     await licencia.save();
 
-    // 5. Generar código de licencia internamente
-    const { codigo } = await generarCodigoLicencia(
-      nit,
-      app || licencia.app,
-      instalacion_hash,
-      dias
-    );
+    console.log(`[activarOnline] Resultado final - NIT: ${nit}, Estado: activo, Tipo: ${tipoLicenciaConfig}, Expiración: ${fechaExpiracion ? fechaExpiracion.toISOString() : 'NULL'}`);
 
-    // 6. Registrar la licencia usando el código generado (sin exponerlo)
-    const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
-
-    if (resultado.error) {
-      return resultado;
-    }
-
-    // 7. Retornar solo estado, expira y dias_restantes (sin exponer el código)
-    // Si es permanente, no hay fecha de expiración y dias_restantes es null
+    // 6. Retornar respuesta con los datos requeridos
     return {
-      estado: resultado.estado,
-      tipo_licencia: licencia.tipo_licencia || 'demo',
-      expira: esPermanente ? null : licencia.fecha_expiracion,
-      dias_restantes: esPermanente ? null : calcularDiasRestantes(licencia.fecha_expiracion),
+      estado: 'activo',
+      tipo_licencia: tipoLicenciaConfig,
+      fecha_expiracion: fechaExpiracion,
+      dias_restantes: fechaExpiracion ? calcularDiasRestantes(fechaExpiracion) : null,
       instalacion_hash: licencia.instalacion_hash,
     };
   } catch (error) {
