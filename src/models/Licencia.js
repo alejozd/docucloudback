@@ -19,7 +19,7 @@ const Licencia = (sequelize, DataTypes) => {
         allowNull: true,  // Permitir null hasta que se active la licencia
       },
       estado: {
-        type: DataTypes.ENUM("demo", "activo", "bloqueado"),
+        type: DataTypes.ENUM("demo", "activa", "bloqueado"),
         allowNull: false,
         defaultValue: "demo",
       },
