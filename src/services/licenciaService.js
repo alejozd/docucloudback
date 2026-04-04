@@ -338,7 +338,22 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       dias = null;
     }
 
-    // 4. Generar código de licencia internamente
+    // 4. Calcular fecha_expiracion SIEMPRE si tipo_licencia ≠ 'demo'
+    if (tipoLicencia !== 'demo') {
+      licencia.estado = 'activa';
+      
+      if (esPermanente) {
+        licencia.fecha_expiracion = null;
+      } else {
+        // anual → calcular desde hoy + dias_licencia
+        licencia.fecha_expiracion = new Date();
+        licencia.fecha_expiracion.setDate(licencia.fecha_expiracion.getDate() + dias);
+      }
+      
+      await licencia.save();
+    }
+
+    // 5. Generar código de licencia internamente
     const { codigo } = await generarCodigoLicencia(
       nit,
       app || licencia.app,
@@ -346,14 +361,14 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       dias
     );
 
-    // 5. Registrar la licencia usando el código generado (sin exponerlo)
+    // 6. Registrar la licencia usando el código generado (sin exponerlo)
     const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
 
     if (resultado.error) {
       return resultado;
     }
 
-    // 6. Retornar solo estado, expira y dias_restantes (sin exponer el código)
+    // 7. Retornar solo estado, expira y dias_restantes (sin exponer el código)
     // Si es permanente, no hay fecha de expiración y dias_restantes es null
     return {
       estado: resultado.estado,
