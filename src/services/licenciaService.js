@@ -96,18 +96,34 @@ const activarLicencia = async (nit, instalacion_hash, app) => {
   }
 };
 
-// Validar licencia (uso normal)
-const validarLicencia = async (nit, instalacion_hash) => {
+// Validar licencia (uso normal) - con auto-creación de licencias demo
+const validarLicencia = async (nit, instalacion_hash, app) => {
   try {
     // Buscar licencia
-    const licencia = await Licencia.findOne({ where: { nit } });
+    let licencia = await Licencia.findOne({ where: { nit } });
 
-    // Si no existe → error "no_autorizado"
+    // Si no existe → crear automáticamente una licencia DEMO
     if (!licencia) {
-      return {
-        error: "no_autorizado",
-        mensaje: "No existe licencia registrada para este NIT",
-      };
+      console.log(`[validarLicencia] Licencia no encontrada para NIT: ${nit}, creando DEMO automáticamente`);
+      
+      const diasDemo = process.env.DIAS_DEMO ? parseInt(process.env.DIAS_DEMO) : 15;
+      const ahora = new Date();
+      const fechaExpiracion = new Date(ahora.getTime() + diasDemo * 24 * 60 * 60 * 1000);
+      
+      licencia = await Licencia.create({
+        nit,
+        app: app || 'desconocido',
+        estado: ESTADOS.DEMO,
+        tipo_licencia: 'demo',
+        dias_demo: diasDemo,
+        dias_licencia: null,
+        instalacion_hash,
+        fecha_activacion: ahora,
+        fecha_expiracion: fechaExpiracion,
+        ultima_validacion: ahora
+      });
+      
+      console.log(`[validarLicencia] Licencia DEMO creada para NIT: ${nit}, días: ${diasDemo}, expiración: ${fechaExpiracion.toISOString()}`);
     }
 
     // 🔹 Manejo de instalación

@@ -50,7 +50,7 @@ const activar = async (req, res) => {
 // Controlador para validar licencia
 const validar = async (req, res) => {
   try {
-    const { nit, instalacion_hash } = req.body;
+    const { nit, instalacion_hash, app } = req.body;
 
     // Validaciones básicas
     if (!nit || !instalacion_hash) {
@@ -60,7 +60,7 @@ const validar = async (req, res) => {
       });
     }
 
-    const resultado = await validarLicencia(nit, instalacion_hash);
+    const resultado = await validarLicencia(nit, instalacion_hash, app);
 
     if (resultado.error) {
       const statusCode =
