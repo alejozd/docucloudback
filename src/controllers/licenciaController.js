@@ -275,7 +275,7 @@ const activarEnLinea = async (req, res) => {
 // Controlador para convertir licencia demo a real (anual o permanente)
 const convertir = async (req, res) => {
   try {
-    const { nit, tipo_licencia, dias_licencia } = req.body;
+    const { nit, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
 
     // Validaciones básicas
     if (!nit) {
@@ -306,7 +306,7 @@ const convertir = async (req, res) => {
       });
     }
 
-    const resultado = await convertirLicencia(nit, tipo_licencia, dias_licencia);
+    const resultado = await convertirLicencia(nit, tipo_licencia, dias_licencia, instalacion_hash);
 
     return res.status(200).json(resultado);
   } catch (error) {
