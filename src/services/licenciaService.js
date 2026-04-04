@@ -1,6 +1,13 @@
 const crypto = require("crypto");
 const { Licencia } = require("../models");
 
+// Constantes de estados para evitar errores
+const ESTADOS = {
+  DEMO: 'demo',
+  ACTIVA: 'activa',
+  BLOQUEADO: 'bloqueado'
+};
+
 // Helpers
 const calcularDiasRestantes = (fechaExpiracion) => {
   if (!fechaExpiracion) return 0;
@@ -64,10 +71,10 @@ const activarLicencia = async (nit, instalacion_hash, app) => {
     // 🔹 Validar expiración
     const ahora = new Date();
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
-      licencia.estado = "bloqueado";
+      licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
       return {
-        estado: "bloqueado",
+        estado: ESTADOS.BLOQUEADO,
         tipo_licencia: licencia.tipo_licencia || 'demo',
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
@@ -119,10 +126,10 @@ const validarLicencia = async (nit, instalacion_hash) => {
     // Si expiró → estado = bloqueado
     const ahora = new Date();
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
-      licencia.estado = "bloqueado";
+      licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
       return {
-        estado: "bloqueado",
+        estado: ESTADOS.BLOQUEADO,
         tipo_licencia: licencia.tipo_licencia || 'demo',
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
@@ -250,7 +257,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     }
 
     // Actualizar licencia
-    licencia.estado = "activa";
+    licencia.estado = ESTADOS.ACTIVA;
     // Solo actualizar fecha_expiracion si viene en el payload y no es null
     // Esto permite que activarOnline controle el cálculo de fecha_expiracion
     if (data.exp) {
@@ -261,7 +268,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     await licencia.save();
 
     return {
-      estado: "activa",
+      estado: ESTADOS.ACTIVA,
       tipo_licencia: licencia.tipo_licencia || 'demo',
       expira: licencia.fecha_expiracion,
       instalacion_hash: licencia.instalacion_hash,
@@ -389,7 +396,7 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
     licencia.tipo_licencia = tipoLicenciaConfig;
     licencia.fecha_activacion = ahora;
     licencia.fecha_expiracion = fechaExpiracion;
-    licencia.estado = 'activo';
+    licencia.estado = ESTADOS.ACTIVA;
     licencia.ultima_validacion = ahora;
 
     // Guardar dias_demo y dias_licencia según corresponda
@@ -402,13 +409,13 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 
     await licencia.save();
 
-    console.log(`[activarOnline] Resultado final - NIT: ${nit}, Estado: activo, Tipo: ${tipoLicenciaConfig}, Expiración: ${fechaExpiracion ? fechaExpiracion.toISOString() : 'NULL'}`);
+    console.log(`[activarOnline] Resultado final - NIT: ${nit}, Estado: ${ESTADOS.ACTIVA}, Tipo: ${tipoLicenciaConfig}, Expiración: ${fechaExpiracion ? fechaExpiracion.toISOString() : 'NULL'}`);
 
     // 6. Retornar respuesta con los datos requeridos
     return {
-      estado: 'activo',
+      estado: ESTADOS.ACTIVA,
       tipo_licencia: tipoLicenciaConfig,
-      fecha_expiracion: fechaExpiracion,
+      expira: fechaExpiracion,
       dias_restantes: fechaExpiracion ? calcularDiasRestantes(fechaExpiracion) : null,
       instalacion_hash: licencia.instalacion_hash,
     };
@@ -440,7 +447,7 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_
     // Preparar campos a actualizar
     const updateData = {
       tipo_licencia,
-      estado: 'activa',
+      estado: ESTADOS.ACTIVA,
     };
 
     // Asignar dias_licencia según el tipo
@@ -518,10 +525,10 @@ const obtenerEstado = async (nit, instalacion_hash) => {
     // Si expiró → estado = bloqueado
     const ahora = new Date();
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
-      licencia.estado = "bloqueado";
+      licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
       return {
-        estado: "bloqueado",
+        estado: ESTADOS.BLOQUEADO,
         tipo_licencia: licencia.tipo_licencia || 'demo',
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,

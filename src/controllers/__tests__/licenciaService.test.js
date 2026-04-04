@@ -138,7 +138,7 @@ describe("Licencia Service", () => {
         id: 1,
         nit,
         instalacion_hash,
-        estado: "activo",
+        estado: "activa",
         fecha_expiracion: fechaExpiracion,
         ultima_validacion: null,
         save: jest.fn().mockResolvedValue(true),
@@ -151,7 +151,7 @@ describe("Licencia Service", () => {
         instalacion_hash
       );
 
-      expect(resultado.estado).toBe("activo");
+      expect(resultado.estado).toBe("activa");
       expect(resultado.dias_restantes).toBeGreaterThanOrEqual(14);
       expect(licenciaActiva.ultima_validacion).toBeDefined();
       expect(licenciaActiva.save).toHaveBeenCalled();
