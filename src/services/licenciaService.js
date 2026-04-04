@@ -237,7 +237,8 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 
     // Actualizar licencia
     licencia.estado = "activa";
-    licencia.fecha_expiracion = new Date(data.exp);
+    // Si data.exp existe, establecer fecha_expiracion; si es null/undefined, dejar null (licencia permanente)
+    licencia.fecha_expiracion = data.exp ? new Date(data.exp) : null;
     licencia.updated_at = new Date();
 
     await licencia.save();
@@ -263,14 +264,18 @@ const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
       throw new Error("instalacion_hash_requerido");
     }
 
-    const fechaExp = new Date();
-    fechaExp.setDate(fechaExp.getDate() + dias);
+    // Si dias es null (licencia permanente), no establecer fecha de expiración
+    let fechaExp = null;
+    if (dias !== null && dias !== undefined) {
+      fechaExp = new Date();
+      fechaExp.setDate(fechaExp.getDate() + dias);
+    }
 
     const payload = {
       nit,
       app,
       instalacion_hash,
-      exp: fechaExp.toISOString(),
+      exp: fechaExp ? fechaExp.toISOString() : null,
     };
 
     const payloadString = JSON.stringify(payload);
@@ -318,8 +323,19 @@ const activarOnline = async (nit, app, instalacion_hash) => {
       };
     }
 
-    // 3. Obtener días demo de la licencia
-    const dias = licencia.dias_demo || 15;
+    // 3. Determinar los días según el tipo de licencia
+    const tipoLicencia = licencia.tipo_licencia || 'demo';
+    let dias;
+    let esPermanente = false;
+
+    if (tipoLicencia === 'demo') {
+      dias = licencia.dias_demo || 15;
+    } else if (tipoLicencia === 'anual') {
+      dias = licencia.dias_licencia || 365;
+    } else if (tipoLicencia === 'permanente') {
+      esPermanente = true;
+      dias = null;
+    }
 
     // 4. Generar código de licencia internamente
     const { codigo } = await generarCodigoLicencia(
@@ -337,10 +353,11 @@ const activarOnline = async (nit, app, instalacion_hash) => {
     }
 
     // 6. Retornar solo estado, expira y dias_restantes (sin exponer el código)
+    // Si es permanente, no hay fecha de expiración y dias_restantes es null
     return {
       estado: resultado.estado,
-      expira: licencia.fecha_expiracion,
-      dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
+      expira: esPermanente ? null : licencia.fecha_expiracion,
+      dias_restantes: esPermanente ? null : calcularDiasRestantes(licencia.fecha_expiracion),
     };
   } catch (error) {
     console.error("Error en activarOnline:", error.message);
