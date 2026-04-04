@@ -31,6 +31,6 @@ router.post("/licencias/registrar", registrar);
 router.post("/licencias/generar-codigo", verificarApiKey, generarCodigo);
 
 // POST /api/licencia/activar-online (activación online sin exponer código)
-router.post("/licencia/activar-online", activarEnLinea);
+router.post("/licencias/activar-online", activarEnLinea);
 
 module.exports = router;
