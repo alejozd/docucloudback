@@ -444,8 +444,8 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 // Convertir licencia demo a real (anual o permanente)
 const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_hash) => {
   try {
-    // Validar tipo de licencia
-    if (!['anual', 'permanente'].includes(tipo_licencia)) {
+    // Validar tipo de licencia - debe ser uno de: 'demo', 'anual', 'permanente'
+    if (!['demo', 'anual', 'permanente'].includes(tipo_licencia)) {
       throw new Error("tipo_invalido");
     }
 
@@ -460,21 +460,22 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_
       whereClause.instalacion_hash = instalacion_hash;
     }
 
-    // Preparar campos a actualizar
+    // Preparar campos a actualizar - solo tipo_licencia y dias_licencia
+    // El estado se fuerza a 'demo' para indicar que pendiente de activación
     const updateData = {
       tipo_licencia,
-      estado: ESTADOS.ACTIVA,
+      estado: ESTADOS.DEMO, // Forzar estado demo - pendiente de activación
     };
 
     // Asignar dias_licencia según el tipo
     if (tipo_licencia === 'anual') {
       updateData.dias_licencia = dias_licencia;
-      updateData.fecha_expiracion = null; // Se regenerará en próxima activación
     } else {
-      // Permanente → dias_licencia = null
+      // Permanente o demo → dias_licencia = null
       updateData.dias_licencia = null;
-      updateData.fecha_expiracion = null;
     }
+
+    // NO modificar fecha_activacion ni fecha_expiracion - se recalcularán en activación
 
     // Ejecutar UPDATE directo y obtener filas afectadas
     const [filasAfectadas] = await Licencia.update(updateData, {
@@ -483,6 +484,7 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_
     });
 
     // Loggear el resultado del UPDATE
+    console.log(`[convertirLicencia] Licencia convertida a ${tipo_licencia}, pendiente de activacion`);
     console.log(`[convertirLicencia] UPDATE ejecutado - NIT: ${nit}, Filas afectadas: ${filasAfectadas}, Datos:`, updateData);
 
     // Verificar que se haya afectado al menos 1 fila
@@ -494,16 +496,10 @@ const convertirLicencia = async (nit, tipo_licencia, dias_licencia, instalacion_
     const licenciaActualizada = await Licencia.findOne({ where: { nit } });
 
     return {
-      message: "Licencia convertida correctamente",
-      filas_afectadas: filasAfectadas,
-      datos_actualizados: {
-        nit: licenciaActualizada.nit,
-        tipo_licencia: licenciaActualizada.tipo_licencia,
-        dias_licencia: licenciaActualizada.dias_licencia,
-        estado: licenciaActualizada.estado,
-        fecha_expiracion: licenciaActualizada.fecha_expiracion,
-        instalacion_hash: licenciaActualizada.instalacion_hash,
-      },
+      ok: true,
+      mensaje: "Licencia actualizada, pendiente de activacion",
+      tipo_licencia: licenciaActualizada.tipo_licencia,
+      estado: licenciaActualizada.estado,
     };
   } catch (error) {
     console.error("Error en convertirLicencia:", error.message);
