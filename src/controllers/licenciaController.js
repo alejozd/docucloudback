@@ -15,14 +15,14 @@ const activar = async (req, res) => {
     const { nit, instalacion_hash, app } = req.body;
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash) {
+    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
       return res.status(400).json({
         error: "campos_requeridos",
-        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+        mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
       });
     }
 
-    const resultado = await activarLicencia(nit, instalacion_hash, app);
+    const resultado = await activarLicencia(nit, instalacion_hash, app, req.ip, req.body.version_app);
 
     if (resultado.error) {
       return res.status(400).json(resultado);
@@ -53,14 +53,14 @@ const validar = async (req, res) => {
     const { nit, instalacion_hash, app } = req.body;
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash) {
+    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
       return res.status(400).json({
         error: "campos_requeridos",
-        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+        mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
       });
     }
 
-    const resultado = await validarLicencia(nit, instalacion_hash, app);
+    const resultado = await validarLicencia(nit, instalacion_hash, app, req.ip, req.body.version_app);
 
     if (resultado.error) {
       const statusCode =
@@ -238,17 +238,17 @@ const generarCodigo = async (req, res) => {
 // Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 const activarEnLinea = async (req, res) => {
   try {
-    const { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia } = req.body;
+    const { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, version_app } = req.body;
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash) {
+    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
       return res.status(400).json({
         error: "campos_requeridos",
-        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+        mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
       });
     }
 
-    const resultado = await activarOnline(nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia);
+    const resultado = await activarOnline(nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, req.ip, version_app);
 
     if (resultado.error) {
       return res.status(400).json(resultado);
@@ -276,13 +276,13 @@ const activarEnLinea = async (req, res) => {
 // Controlador para convertir licencia demo a real (anual o permanente)
 const convertir = async (req, res) => {
   try {
-    const { nit, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
+    const { nit, app, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
 
     // Validaciones básicas
-    if (!nit) {
+    if (!nit || !app || !String(app).trim()) {
       return res.status(400).json({
         error: "campo_requerido",
-        mensaje: "El campo 'nit' es requerido",
+        mensaje: "Los campos 'nit' y 'app' son requeridos",
       });
     }
 
@@ -309,7 +309,7 @@ const convertir = async (req, res) => {
       });
     }
 
-    const resultado = await convertirLicencia(nit, tipo_licencia, dias_licencia, instalacion_hash);
+    const resultado = await convertirLicencia(nit, app, tipo_licencia, dias_licencia, instalacion_hash);
 
     return res.status(200).json(resultado);
   } catch (error) {
