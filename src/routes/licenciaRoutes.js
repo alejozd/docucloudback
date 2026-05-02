@@ -84,17 +84,17 @@ router.put("/licencias/editar/:id", authenticateToken, async (req, res) => {
 // GET /api/licencia/estado
 router.get("/licencia/estado", async (req, res) => {
   try {
-    const { nit, instalacion_hash } = req.query;
+    const { nit, app, instalacion_hash, version_app } = req.query;
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash) {
+    if (!nit || !app || !String(app).trim() || !instalacion_hash) {
       return res.status(400).json({
         error: "campos_requeridos",
-        mensaje: "Los campos 'nit' e 'instalacion_hash' son requeridos",
+        mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
       });
     }
 
-    const resultado = await obtenerEstado(nit, instalacion_hash);
+    const resultado = await obtenerEstado(nit, app, instalacion_hash, req.ip, version_app);
 
     if (resultado.error) {
       const statusCode =

@@ -12,7 +12,6 @@ const Licencia = (sequelize, DataTypes) => {
       nit: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
       },
       instalacion_hash: {
         type: DataTypes.STRING,
@@ -42,6 +41,14 @@ const Licencia = (sequelize, DataTypes) => {
       },
       app: {
         type: DataTypes.STRING,
+        allowNull: false,
+      },
+      ultima_ip: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      version_app: {
+        type: DataTypes.STRING,
         allowNull: true,
       },
       tipo_licencia: {
@@ -58,6 +65,12 @@ const Licencia = (sequelize, DataTypes) => {
       tableName: "licencias",
       timestamps: true,
       underscored: true,
+      indexes: [
+        {
+          unique: true,
+          fields: ["nit", "app"],
+        },
+      ],
     }
   );
 

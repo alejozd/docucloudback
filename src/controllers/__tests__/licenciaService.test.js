@@ -150,7 +150,7 @@ describe("Licencia Service", () => {
       expect(mockLicenciaModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           nit,
-          app: app || 'desconocido',
+          app,
           estado: 'demo',
           tipo_licencia: 'demo',
           dias_demo: 15,
@@ -180,7 +180,8 @@ describe("Licencia Service", () => {
 
       const resultado = await licenciaService.validarLicencia(
         nit,
-        instalacion_hash
+        instalacion_hash,
+        "mi-app"
       );
 
       expect(resultado.estado).toBe("activa");
@@ -206,7 +207,8 @@ describe("Licencia Service", () => {
 
       const resultado = await licenciaService.validarLicencia(
         nit,
-        instalacion_hash
+        instalacion_hash,
+        "mi-app"
       );
 
       expect(resultado.estado).toBe("bloqueado");
