@@ -85,20 +85,24 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       await licencia.save();
       return {
         estado: ESTADOS.BLOQUEADO,
-        tipo_licencia: licencia.tipo_licencia || 'demo',
+        tipo_licencia: licencia.tipo_licencia,
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
         instalacion_hash: licencia.instalacion_hash,
+        app: licencia.app,
+        version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
       };
     }
 
     return {
       estado: licencia.estado,
-      tipo_licencia: licencia.tipo_licencia || 'demo',
+      tipo_licencia: licencia.tipo_licencia,
       expira: licencia.fecha_expiracion,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
       instalacion_hash: licencia.instalacion_hash,
+      app: licencia.app,
+      version_app: version_app || licencia.version_app || null,
     };
   } catch (error) {
     console.error("Error en activarLicencia:", error.message);
@@ -159,10 +163,12 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       await licencia.save();
       return {
         estado: ESTADOS.BLOQUEADO,
-        tipo_licencia: licencia.tipo_licencia || 'demo',
+        tipo_licencia: licencia.tipo_licencia,
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
         instalacion_hash: licencia.instalacion_hash,
+        app: licencia.app,
+        version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
       };
     }
@@ -175,10 +181,12 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 
     return {
       estado: licencia.estado,
-      tipo_licencia: licencia.tipo_licencia || 'demo',
+      tipo_licencia: licencia.tipo_licencia,
       expira: licencia.fecha_expiracion,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
       instalacion_hash: licencia.instalacion_hash,
+      app: licencia.app,
+      version_app: version_app || licencia.version_app || null,
     };
   } catch (error) {
     console.error("Error en validarLicencia:", error.message);
@@ -303,7 +311,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 
     return {
       estado: ESTADOS.ACTIVA,
-      tipo_licencia: licencia.tipo_licencia || 'demo',
+      tipo_licencia: licencia.tipo_licencia,
       expira: licencia.fecha_expiracion,
       instalacion_hash: licencia.instalacion_hash,
       mensaje: "Licencia activada correctamente",
@@ -457,6 +465,8 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
       expira: fechaExpiracion,
       dias_restantes: fechaExpiracion ? calcularDiasRestantes(fechaExpiracion) : null,
       instalacion_hash: licencia.instalacion_hash,
+      app: licencia.app,
+      version_app: version_app || licencia.version_app || null,
     };
   } catch (error) {
     console.error("Error en activarOnline:", error.message);
@@ -566,10 +576,12 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
       await licencia.save();
       return {
         estado: ESTADOS.BLOQUEADO,
-        tipo_licencia: licencia.tipo_licencia || 'demo',
+        tipo_licencia: licencia.tipo_licencia,
         expira: licencia.fecha_expiracion,
         dias_restantes: 0,
         instalacion_hash: licencia.instalacion_hash,
+        app: licencia.app,
+        version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
       };
     }
@@ -582,10 +594,12 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
 
     return {
       estado: licencia.estado,
-      tipo_licencia: licencia.tipo_licencia || 'demo',
+      tipo_licencia: licencia.tipo_licencia,
       expira: licencia.fecha_expiracion,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
       instalacion_hash: licencia.instalacion_hash,
+      app: licencia.app,
+      version_app: version_app || licencia.version_app || null,
     };
   } catch (error) {
     console.error("Error en obtenerEstado:", error.message);
