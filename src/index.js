@@ -19,6 +19,27 @@ const {
   Licencia,
 } = require("./models");
 
+// Importar validación de entorno para Telegram Bot
+const { validateTelegramEnv } = require("./config/environment");
+
+// Variable global para trackear si Telegram está habilitado
+global.telegramEnabled = false;
+
+// Validar variables de entorno de Telegram (solo log en dev, error en prod)
+try {
+  const isValid = validateTelegramEnv();
+  if (isValid) {
+    global.telegramEnabled = true;
+  }
+} catch (error) {
+  console.error(error.message);
+  // Continuar sin el módulo de Telegram si falla la validación
+  global.telegramEnabled = false;
+}
+
+// Importar job de monitoreo FSE (se inicializará solo si telegram está habilitado)
+const fseMonitorJob = require("./jobs/fse-monitor.job");
+
 // Importar controladores
 const serialesERPController = require("./controllers/serialesERPController");
 const clientesMediosController = require("./controllers/clientesMediosController");
@@ -49,6 +70,7 @@ const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 const licenciaRoutes = require("./routes/licenciaRoutes");
+const telegramRoutes = require("./routes/telegram.routes");
 
 // Configurar Express
 const app = express();
@@ -140,6 +162,14 @@ app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
 app.use("/api", licenciaRoutes);
 
+// Montar ruta de Telegram Bot (solo si está habilitado)
+if (global.telegramEnabled) {
+  app.use("/telegram", telegramRoutes);
+  console.log('✅ Telegram routes mounted at /telegram');
+} else {
+  console.log('ℹ️  Telegram routes skipped (variables not configured)');
+}
+
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
   res.send("Welcome to the API!");
@@ -163,6 +193,14 @@ async function loadCacheAndStartServer(databaseSyncPromise) {
     } catch (e) {
       console.error("❌ ERROR FATAL al cargar la caché de videos:", e.message);
       global.videoCache = []; // Si falla, inicializa vacío para no romper la app
+    }
+
+    // Inicializar jobs de monitoreo FSE (solo en production)
+    if (NODE_ENV === 'production') {
+      const jobInitialized = fseMonitorJob.initialize();
+      if (jobInitialized) {
+        fseMonitorJob.startAllJobs();
+      }
     }
 
     // Inicia el servidor
