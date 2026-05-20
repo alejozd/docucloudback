@@ -44,7 +44,7 @@ class FSEMonitorJob {
 
   /**
    * Inicia todos los jobs programados
-   * Solo se ejecuta en production
+   * Solo se ejecuta en production y si telegram está habilitado
    */
   startAllJobs() {
     if (!this.initialized) {
@@ -54,6 +54,11 @@ class FSEMonitorJob {
 
     if (process.env.NODE_ENV !== 'production') {
       console.log('ℹ️  Jobs solo se ejecutan en production. Skipping.');
+      return;
+    }
+
+    if (!global.telegramEnabled) {
+      console.log('ℹ️  Telegram no habilitado. Skipping FSE Monitor jobs.');
       return;
     }
 

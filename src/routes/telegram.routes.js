@@ -45,6 +45,13 @@ const initializeTelegramModule = () => {
   }
 };
 
+// Inicializar módulo al cargar rutas (solo si está habilitado)
+if (global.telegramEnabled) {
+  initializeTelegramModule();
+} else {
+  console.log('ℹ️  Telegram module skipped (variables not configured)');
+}
+
 /**
  * POST /webhook - Endpoint principal para Telegram
  * Recibe updates desde Telegram Bot API
@@ -129,8 +136,5 @@ router.get('/webhook-info', async (req, res) => {
     });
   }
 });
-
-// Inicializar módulo al cargar rutas
-initializeTelegramModule();
 
 module.exports = router;

@@ -22,16 +22,23 @@ const {
 // Importar validación de entorno para Telegram Bot
 const { validateTelegramEnv } = require("./config/environment");
 
-// Importar job de monitoreo FSE
-const fseMonitorJob = require("./jobs/fse-monitor.job");
+// Variable global para trackear si Telegram está habilitado
+global.telegramEnabled = false;
 
 // Validar variables de entorno de Telegram (solo log en dev, error en prod)
 try {
-  validateTelegramEnv();
+  const isValid = validateTelegramEnv();
+  if (isValid) {
+    global.telegramEnabled = true;
+  }
 } catch (error) {
   console.error(error.message);
   // Continuar sin el módulo de Telegram si falla la validación
+  global.telegramEnabled = false;
 }
+
+// Importar job de monitoreo FSE (se inicializará solo si telegram está habilitado)
+const fseMonitorJob = require("./jobs/fse-monitor.job");
 
 // Importar controladores
 const serialesERPController = require("./controllers/serialesERPController");
@@ -155,8 +162,13 @@ app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
 app.use("/api", licenciaRoutes);
 
-// Montar ruta de Telegram Bot
-app.use("/telegram", telegramRoutes);
+// Montar ruta de Telegram Bot (solo si está habilitado)
+if (global.telegramEnabled) {
+  app.use("/telegram", telegramRoutes);
+  console.log('✅ Telegram routes mounted at /telegram');
+} else {
+  console.log('ℹ️  Telegram routes skipped (variables not configured)');
+}
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
