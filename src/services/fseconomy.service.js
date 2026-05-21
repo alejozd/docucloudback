@@ -64,51 +64,139 @@ class FSEconomyService {
    * @returns {Promise<Array>} Array de FBOs con información detallada
    */
   async getMyFBOs() {
+    let startTime;
     try {
-      // 🔍 DEBUG: Mostrar qué se está enviando a FSEconomy
-      console.log('🔍 FSE Debug - Keys:', {
-        userkey: this.userKey ? `${this.userKey.substring(0, 8)}...` : '❌ UNDEFINED',
-        readKey: this.readKey ? `${this.readKey.substring(0, 8)}...` : '❌ UNDEFINED'
-      });
-
-      console.log('🔍 FSE Debug - URL params:', {
+      console.log('🔍 [FSE-DEBUG-START] getMyFBOs() llamado');
+      
+      // 1. Validar keys ANTES de hacer la petición
+      if (!this.userKey || !this.readKey) {
+        console.error('❌ [FSE-DEBUG] Keys faltantes:', { 
+          userKey: !!this.userKey, 
+          readKey: !!this.readKey 
+        });
+        throw new Error('FSE keys no configuradas');
+      }
+      
+      // 2. Construir URL completa para logging
+      const queryString = new URLSearchParams({
         userkey: this.userKey,
         format: 'xml',
         query: 'fbos',
         search: 'key',
         readaccesskey: this.readKey
+      }).toString();
+      const fullUrl = `https://server.fseconomy.net/data?${queryString}`;
+      
+      console.log('🔍 [FSE-DEBUG] URL completa (masked):', fullUrl.replace(/key=[^&]+/g, 'key=***'));
+      console.log('🔍 [FSE-DEBUG] User-Agent del proceso:', process.env.NODE_ENV, process.version);
+      
+      // 3. Crear instancia axios con configuración EXPLÍCITA y hooks de logging
+      const axios = require('axios');
+      const https = require('https');
+      
+      const instance = axios.create({
+        timeout: 20000, // 20 segundos
+        headers: {
+          'Accept': 'application/xml, text/xml, */*',
+          'User-Agent': 'ZAM-AIR-Bot/1.0 (Node.js/' + process.version + ')'
+        },
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: true,
+          keepAlive: true,
+          timeout: 15000
+        }),
+        // Hooks para logging de la petición real
+        transformRequest: [(data, headers) => {
+          console.log('📤 [FSE-DEBUG] Axios transformRequest - Headers:', JSON.stringify(headers));
+          return data;
+        }]
       });
-
-      // Construir URL completa para logging (sin exponer keys completas en prod)
-      const debugUrl = `https://server.fseconomy.net/data?userkey=${this.userKey?.substring(0,8)}...&format=xml&query=fbos&search=key&readaccesskey=${this.readKey?.substring(0,8)}...`;
-      console.log('🔍 FSE Debug - Request URL (masked):', debugUrl);
-
-      const url = this._buildUrl('fbos', { search: 'key' });
-      const xmlData = await this._fetchXml(url);
       
-      console.log('🔍 FSE Debug - Response status: 200');
-      console.log('🔍 FSE Debug - Response first 200 chars:', xmlData?.substring(0, 200));
+      // 4. Interceptors para logging de request/response
+      instance.interceptors.request.use(config => {
+        console.log('📤 [FSE-DEBUG] Request interceptor - URL:', config.url);
+        console.log('📤 [FSE-DEBUG] Request interceptor - baseURL:', config.baseURL);
+        console.log('📤 [FSE-DEBUG] Request interceptor - params:', config.params);
+        return config;
+      }, error => {
+        console.error('❌ [FSE-DEBUG] Request interceptor ERROR:', error.message);
+        return Promise.reject(error);
+      });
       
-      const fbos = await parseFSEXml(xmlData, 'fbos');
-
-      // Enriquecer datos con cálculos adicionales
-      return fbos.map(fbo => ({
-        ...fbo,
-        fuelStatus: this._getFuelStatus(fbo.supplies, fbo.daysOfSupplies),
-        needsAttention: fbo.daysOfSupplies < 30
-      }));
-    } catch (error) {
-      console.error('❌ FSE Debug - Full error:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data?.substring(0, 200),
-        config: {
-          url: error.config?.url,
-          params: error.config?.params?.userkey ? '***' : undefined
+      instance.interceptors.response.use(response => {
+        console.log('📥 [FSE-DEBUG] Response interceptor - Status:', response.status);
+        console.log('📥 [FSE-DEBUG] Response interceptor - Headers:', JSON.stringify(response.headers));
+        console.log('📥 [FSE-DEBUG] Response data type:', typeof response.data);
+        console.log('📥 [FSE-DEBUG] Response first 150 chars:', String(response.data).substring(0, 150));
+        return response;
+      }, error => {
+        console.error('❌ [FSE-DEBUG] Response interceptor ERROR:', {
+          name: error.name,
+          message: error.message,
+          code: error.code,
+          errno: error.errno,
+          syscall: error.syscall,
+          hasResponse: !!error.response,
+          hasConfig: !!error.config,
+          responseStatus: error.response?.status,
+          responseData: error.response?.data?.substring?.(0, 100),
+          configUrl: error.config?.url,
+          configBaseURL: error.config?.baseURL
+        });
+        return Promise.reject(error);
+      });
+      
+      // 5. Hacer la petición REAL
+      console.log('📡 [FSE-DEBUG] Ejecutando axios.get()...');
+      startTime = Date.now();
+      
+      const response = await instance.get('', { 
+        params: {
+          userkey: this.userKey,
+          format: 'xml',
+          query: 'fbos',
+          search: 'key',
+          readaccesskey: this.readKey
         }
       });
-      console.error('❌ Error obteniendo FBOs:', error.message);
-      throw error;
+      
+      const duration = Date.now() - startTime;
+      console.log(`✅ [FSE-DEBUG] Petición completada en ${duration}ms - Status: ${response.status}`);
+      
+      // 6. Parsear con xml-parser
+      const xmlParser = require('../utils/xml-parser');
+      const fbos = await xmlParser.parseFSEXml(response.data, 'fbos');
+      
+      console.log(`✅ [FSE-DEBUG-END] Parsed ${fbos.length} FBOs successfully`);
+      return fbos;
+      
+    } catch (error) {
+      const duration = Date.now() - (startTime || Date.now());
+      console.error('❌ [FSE-DEBUG-ERROR] Final catch:', {
+        message: error.message,
+        name: error.name,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+        duration: duration + 'ms',
+        hasResponse: !!error.response,
+        hasRequest: !!error.request,
+        hasConfig: !!error.config,
+        responseStatus: error.response?.status,
+        responseDataPreview: typeof error.response?.data === 'string' ? error.response.data.substring(0, 150) : typeof error.response?.data,
+        requestInfo: error.request ? {
+          host: error.request.host,
+          path: error.request.path,
+          method: error.request.method
+        } : null,
+        configInfo: error.config ? {
+          url: error.config.url,
+          baseURL: error.config.baseURL,
+          params: error.config.params?.userkey ? '***' : error.config.params
+        } : null,
+        stack: error.stack?.split('\n').slice(0, 5)
+      });
+      throw new Error('Error conectando con FSEconomy API: ' + error.message);
     }
   }
 
