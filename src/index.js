@@ -77,6 +77,9 @@ const app = express();
 const PORT = process.env.PORT || 3100;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
+// ✅ Confiar en headers de proxy (Cloudflare Tunnel)
+app.set('trust proxy', 1);
+
 //Configurar CORS y middlewares
 app.use(cors());
 app.use(bodyParser.json());

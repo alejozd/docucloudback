@@ -65,8 +65,30 @@ class FSEconomyService {
    */
   async getMyFBOs() {
     try {
+      // 🔍 DEBUG: Mostrar qué se está enviando a FSEconomy
+      console.log('🔍 FSE Debug - Keys:', {
+        userkey: this.userKey ? `${this.userKey.substring(0, 8)}...` : '❌ UNDEFINED',
+        readKey: this.readKey ? `${this.readKey.substring(0, 8)}...` : '❌ UNDEFINED'
+      });
+
+      console.log('🔍 FSE Debug - URL params:', {
+        userkey: this.userKey,
+        format: 'xml',
+        query: 'fbos',
+        search: 'key',
+        readaccesskey: this.readKey
+      });
+
+      // Construir URL completa para logging (sin exponer keys completas en prod)
+      const debugUrl = `https://server.fseconomy.net/data?userkey=${this.userKey?.substring(0,8)}...&format=xml&query=fbos&search=key&readaccesskey=${this.readKey?.substring(0,8)}...`;
+      console.log('🔍 FSE Debug - Request URL (masked):', debugUrl);
+
       const url = this._buildUrl('fbos', { search: 'key' });
       const xmlData = await this._fetchXml(url);
+      
+      console.log('🔍 FSE Debug - Response status: 200');
+      console.log('🔍 FSE Debug - Response first 200 chars:', xmlData?.substring(0, 200));
+      
       const fbos = await parseFSEXml(xmlData, 'fbos');
 
       // Enriquecer datos con cálculos adicionales
@@ -76,6 +98,15 @@ class FSEconomyService {
         needsAttention: fbo.daysOfSupplies < 30
       }));
     } catch (error) {
+      console.error('❌ FSE Debug - Full error:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data?.substring(0, 200),
+        config: {
+          url: error.config?.url,
+          params: error.config?.params?.userkey ? '***' : undefined
+        }
+      });
       console.error('❌ Error obteniendo FBOs:', error.message);
       throw error;
     }
