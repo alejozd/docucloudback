@@ -1,6 +1,8 @@
 const TelegramService = require('../services/telegram.service');
 const FSEconomyService = require('../services/fseconomy.service');
 const DebugLogger = require('../utils/debug-logger');
+const axios = require('axios');
+const xmlParser = require('../utils/xml-parser');
 
 /**
  * Controlador para manejar comandos y respuestas del Telegram Bot
@@ -51,8 +53,18 @@ class TelegramController {
           await this.handleStatus(message.chat.id);
           break;
         case '/fleet':
-        case '/aviones':
           await this.handleFleet(message.chat.id);
+          break;
+        case '/aircraft':
+        case '/aviones':
+          await this._sendAircraftStatus(message.chat.id);
+          break;
+        case '/flights':
+          await this._sendFlightHistory(message.chat.id, args);
+          break;
+        case '/stats':
+        case '/estadisticas':
+          await this._sendPersonalStats(message.chat.id);
           break;
         case '/alerts':
           await this.handleAlerts(message.chat.id);
@@ -82,6 +94,9 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 <b>Comandos disponibles:</b>
 /status - Estado de tus FBOs y suministros
 /fleet - Lista de tus aeronaves
+/aircraft - Mi flota y estado
+/flights [mes] [año] - Historial de vuelos
+/stats - Mis estadísticas personales
 /alerts - Alertas activas
 /help - Ayuda y lista de comandos
 
@@ -250,6 +265,9 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 /start - Mensaje de bienvenida
 /status o /fbo - Estado de FBOs y suministros
 /fleet o /aviones - Lista de aeronaves
+/aircraft - Mi flota y estado
+/flights [mes] [año] - Historial de vuelos
+/stats o /estadisticas - Mis estadísticas personales
 /alerts - Alertas de suministros bajos
 /help - Esta ayuda
 
@@ -358,6 +376,141 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
     }
 
     return message.trim();
+  }
+
+
+  async _sendAircraftStatus(chatId) {
+    try {
+      DebugLogger.log('TELEGRAM', '/aircraft requested');
+
+      const response = await axios.get('https://server.fseconomy.net/data', {
+        params: {
+          userkey: process.env.FSE_USERKEY,
+          format: 'xml',
+          query: 'aircraft',
+          search: 'ownername',
+          ownername: 'alejozd',
+          readaccesskey: process.env.FSE_READ_KEY,
+        },
+        timeout: 15000,
+      });
+
+      const aircraft = await xmlParser.parseFSEXml(response.data, 'aircraft');
+
+      let message = `✈️ <b>Mi Flota ZAM-AIR</b>\n\n`;
+
+      for (const ac of aircraft) {
+        const reg = ac.Registration || ac.registration || 'N/A';
+        const model = ac.MakeModel || ac.makemodel || 'N/A';
+        const location = ac.Location || ac.location || 'Desconocida';
+        const fuel = ac.FuelLevel ? `${ac.FuelLevel}%` : 'N/A';
+        const maint = ac.HoursTo100Hr ? `${ac.HoursTo100Hr}h` : 'N/A';
+
+        message += `<b>${reg}</b> - ${model}\n`;
+        message += `├─ 📍 ${location}\n`;
+        message += `├─ ⛽ Combustible: ${fuel}\n`;
+        message += `└─ 🔧 Próx. 100h: ${maint}\n\n`;
+      }
+
+      message += `<i>💡 Tip: Vuela con el cliente FSE para actualizar ubicación en tiempo real.</i>`;
+
+      await this.telegramService.sendMessage(chatId, message);
+      DebugLogger.log('TELEGRAM', '/aircraft sent successfully');
+    } catch (error) {
+      DebugLogger.error('TELEGRAM', '/aircraft failed', error);
+      await this.telegramService.sendMessage(chatId, '✈️ No pude obtener datos de tu flota. Intenta más tarde.');
+    }
+  }
+
+  async _sendFlightHistory(chatId, args = []) {
+    try {
+      const now = new Date();
+      const month = parseInt(args[0], 10) || now.getMonth() + 1;
+      const year = parseInt(args[1], 10) || now.getFullYear();
+
+      if (month < 1 || month > 12) {
+        await this.telegramService.sendMessage(chatId, '⚠️ Mes inválido. Usa un valor entre 1 y 12.');
+        return;
+      }
+
+      DebugLogger.log('TELEGRAM', `/flights requested for ${month}/${year}`);
+
+      const response = await axios.get('https://server.fseconomy.net/data', {
+        params: {
+          userkey: process.env.FSE_USERKEY,
+          format: 'xml',
+          query: 'flightlogs',
+          search: 'monthyear',
+          readaccesskey: process.env.FSE_READ_KEY,
+          month: String(month).padStart(2, '0'),
+          year: String(year),
+        },
+        timeout: 20000,
+      });
+
+      const flights = await xmlParser.parseFSEXml(response.data, 'flightlogs');
+      const formatted = flights
+        .map((f) => ({
+          date: f.Date || f.date || 'N/A',
+          aircraft: f.Aircraft || f.aircraft || 'N/A',
+          from: f.DepartureIcao || f.from || '---',
+          to: f.ArrivalIcao || f.to || '---',
+          earnings: parseFloat(f.Earnings || f.earnings) || 0,
+        }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      if (!formatted.length) {
+        await this.telegramService.sendMessage(chatId, `✈️ No hay vuelos para ${month}/${year}.`);
+        return;
+      }
+
+      let message = `🛫 <b>Vuelos ${String(month).padStart(2, '0')}/${year}</b>\n\n`;
+      for (const f of formatted.slice(0, 20)) {
+        message += `• ${f.date} | <b>${f.aircraft}</b> | ${f.from}→${f.to} | $${f.earnings.toLocaleString('en-US', { maximumFractionDigits: 0 })}\n`;
+      }
+      if (formatted.length > 20) {
+        message += `\n<i>Mostrando 20 de ${formatted.length} vuelos.</i>`;
+      }
+
+      await this.telegramService.sendMessage(chatId, message);
+    } catch (error) {
+      DebugLogger.error('TELEGRAM', '/flights failed', error);
+      await this.telegramService.sendMessage(chatId, '🛫 No pude obtener historial de vuelos. Intenta más tarde.');
+    }
+  }
+
+  async _sendPersonalStats(chatId) {
+    try {
+      DebugLogger.log('TELEGRAM', '/stats requested');
+
+      const response = await axios.get('https://server.fseconomy.net/data', {
+        params: {
+          userkey: process.env.FSE_USERKEY,
+          format: 'xml',
+          query: 'statistics',
+          search: 'key',
+          readaccesskey: process.env.FSE_READ_KEY,
+        },
+        timeout: 15000,
+      });
+
+      const stats = await xmlParser.parseFSEXml(response.data, 'statistics');
+      const totalHours = parseFloat(stats.TotalHours || stats.totalhours || stats.TotalHoursFlown || 0);
+      const totalEarnings = parseFloat(stats.TotalEarnings || stats.totalearnings || 0);
+      const totalFlights = parseInt(stats.TotalFlights || stats.totalflights || 0, 10);
+      const totalDistance = parseFloat(stats.TotalDistance || stats.totaldistance || 0);
+
+      const message = `📊 <b>Estadísticas de alejozd</b>\n\n`
+        + `⏱️ Horas voladas: <b>${totalHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h</b>\n`
+        + `💰 Ingresos totales: <b>$${totalEarnings.toLocaleString('en-US', { maximumFractionDigits: 0 })}</b>\n`
+        + `✈️ Vuelos completados: <b>${totalFlights.toLocaleString('en-US')}</b>\n`
+        + `🗺️ Distancia total: <b>${totalDistance.toLocaleString('en-US', { maximumFractionDigits: 0 })} nm</b>`;
+
+      await this.telegramService.sendMessage(chatId, message);
+    } catch (error) {
+      DebugLogger.error('TELEGRAM', '/stats failed', error);
+      await this.telegramService.sendMessage(chatId, '📊 No pude obtener tus estadísticas personales. Intenta más tarde.');
+    }
   }
 
   /**
