@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { parseFSEXml } = require('../utils/xml-parser');
+const DebugLogger = require('../utils/debug-logger');
 
 /**
  * Servicio de comunicación con FSEconomy Data Feeds API
@@ -65,11 +66,11 @@ class FSEconomyService {
    */
   async getMyFBOs() {
     try {
-      console.log('🔍 [FSE-DEBUG-START] getMyFBOs() llamado');
+      DebugLogger.log('FSE', 'getMyFBOs() llamado');
       
       // Validar keys
       if (!this.userKey || !this.readKey) {
-        console.error('❌ [FSE-DEBUG] Keys faltantes');
+        DebugLogger.error('FSE', 'Keys faltantes');
         throw new Error('FSE keys no configuradas');
       }
       
@@ -83,7 +84,9 @@ class FSEconomyService {
       }).toString();
       
       const fullUrl = `https://server.fseconomy.net/data?${queryString}`;
-      console.log('🔍 [FSE-DEBUG] Full URL (masked):', fullUrl.replace(/key=[^&]+/g, 'key=***'));
+      if (DebugLogger.isEnabled('FSE')) {
+        DebugLogger.log('FSE', 'Full URL (masked)', { url: fullUrl.replace(/key=[^&]+/g, 'key=***') });
+      }
       
       // ✅ CORRECCIÓN: Usar axios.get() con URL completa, SIN baseURL ni url vacía
       const axios = require('axios');
@@ -102,24 +105,17 @@ class FSEconomyService {
         })
       });
       
-      console.log('✅ [FSE-DEBUG] Response received - Status:', response.status);
-      console.log('📦 [FSE-DEBUG] Data type:', typeof response.data);
-      console.log('📦 [FSE-DEBUG] Preview:', String(response.data).substring(0, 150));
+      DebugLogger.log('FSE', 'Response received', { status: response.status, dataType: typeof response.data });
       
       // Parsear XML
       const xmlParser = require('../utils/xml-parser');
       const fbos = await xmlParser.parseFSEXml(response.data, 'fbos');
       
-      console.log(`✅ [FSE-DEBUG-END] Parsed ${fbos.length} FBOs successfully`);
+      DebugLogger.log('FSE', `Parsed ${fbos.length} FBOs successfully`);
       return fbos;
       
     } catch (error) {
-      console.error('❌ [FSE-DEBUG-ERROR] Final catch:', {
-        name: error.name,
-        message: error.message,
-        code: error.code,
-        stack: error.stack?.split('\n').slice(0, 3)
-      });
+      DebugLogger.error('FSE', 'Error en getMyFBOs', error);
       throw new Error('Error conectando con FSEconomy API: ' + error.message);
     }
   }
@@ -169,15 +165,69 @@ class FSEconomyService {
    */
   async getPaymentsByMonth(month, year) {
     try {
+      DebugLogger.log('FSE', `Fetching payments for ${month}/${year}`);
+      
       const url = this._buildUrl('payments', {
         month: month,
         year: year
       });
       const xmlData = await this._fetchXml(url);
-      return await parseFSEXml(xmlData, 'payments');
+      const payments = await parseFSEXml(xmlData, 'payments');
+      
+      DebugLogger.log('FSE', `Retrieved ${payments?.length || 0} payments`);
+      return payments;
     } catch (error) {
-      console.error('❌ Error obteniendo pagos:', error.message);
+      DebugLogger.error('FSE', 'Error obteniendo pagos', error);
       throw error;
+    }
+  }
+
+  /**
+   * Obtiene ground crew fees acumuladas por FBO para un mes específico
+   * @param {number} month - Mes (1-12)
+   * @param {number} year - Año (ej: 2026)
+   * @returns {Promise<Object>} Mapa de ICAO → total fees
+   */
+  async getGroundCrewFeesByMonth(month, year) {
+    try {
+      DebugLogger.log('FSE', `Fetching payments for ${month}/${year}`);
+      
+      const url = this._buildUrl('payments', {
+        month: month,
+        year: year
+      });
+      const xmlData = await this._fetchXml(url);
+      
+      // Parsear XML de payments
+      const payments = await parseFSEXml(xmlData, 'payments');
+      
+      // Filtrar y agrupar ground crew fees por FBO
+      const feesByFbo = {};
+      
+      const groundCrewPayments = payments.filter(p => 
+        p.type?.toLowerCase?.()?.includes('ground') || 
+        p.description?.toLowerCase?.()?.includes('ground crew')
+      );
+      
+      DebugLogger.log('FSE', `Found ${groundCrewPayments.length} ground crew payments`);
+      
+      for (const payment of groundCrewPayments) {
+        const icao = payment.airportIcao || 'UNKNOWN';
+        const amount = parseFloat(payment.amount) || 0;
+        
+        if (!feesByFbo[icao]) {
+          feesByFbo[icao] = 0;
+        }
+        feesByFbo[icao] += amount;
+      }
+      
+      DebugLogger.log('FSE', `Ground crew fees for ${Object.keys(feesByFbo).length} FBOs`, feesByFbo);
+      return feesByFbo;
+      
+    } catch (error) {
+      DebugLogger.error('FSE', 'Error fetching ground crew fees', error);
+      // Retornar objeto vacío para no romper el flujo
+      return {};
     }
   }
 

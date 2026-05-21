@@ -1,1 +1,15 @@
-(src/controllers/telegram.controller.js)
+```
+# Environment
+.env.local
+.env.*
+
+# Dependencies
+node_modules/
+
+# Editors
+.vscode/
+
+# Logs and temp files
+*.log
+*.tmp
+```

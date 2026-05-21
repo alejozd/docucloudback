@@ -1,5 +1,6 @@
 const TelegramService = require('../services/telegram.service');
 const FSEconomyService = require('../services/fseconomy.service');
+const DebugLogger = require('../utils/debug-logger');
 
 /**
  * Controlador para manejar comandos y respuestas del Telegram Bot
@@ -38,7 +39,7 @@ class TelegramController {
       const command = message.text.split(' ')[0].toLowerCase();
       const args = message.text.split(' ').slice(1);
 
-      console.log(`📨 Comando recibido: ${command} de ${message.from.username}`);
+      DebugLogger.log('TELEGRAM', `Comando recibido: ${command}`, { from: message.from.username });
 
       // Router de comandos
       switch (command) {
@@ -63,7 +64,7 @@ class TelegramController {
           await this.handleUnknownCommand(message.chat.id, command);
       }
     } catch (error) {
-      console.error('❌ Error en handleUpdate:', error.message);
+      DebugLogger.error('TELEGRAM', 'Error en handleUpdate', error);
       // No enviar error a Telegram para evitar loops
     }
   }
@@ -107,20 +108,34 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 
       const fbos = await this.fseconomyService.getMyFBOs();
       
-      const formattedText = this._formatFBOList(fbos);
+      // Obtener fees del mes actual
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      const currentYear = now.getFullYear();
+
+      let feesByFbo = {};
+      try {
+        feesByFbo = await this.fseconomyService.getGroundCrewFeesByMonth(currentMonth, currentYear);
+        DebugLogger.log('TELEGRAM', 'Ground crew fees loaded', { count: Object.keys(feesByFbo).length });
+      } catch (err) {
+        DebugLogger.error('TELEGRAM', 'Failed to load fees, using fallback', err);
+        // feesByFbo stays empty → mostrará $0 como fallback
+      }
+      
+      const formattedText = this._formatFBOList(fbos, feesByFbo);
 
       try {
-        console.log('🔍 [TELEGRAM-DEBUG] Sending message to Telegram...');
+        DebugLogger.log('TELEGRAM', 'Sending message to Telegram', { count: fbos?.length });
         
         const result = await this.telegramService.sendMessage(chatId, formattedText);
         
         if (result?.ok) {
-          console.log('✅ [TELEGRAM-DEBUG] Message sent successfully');
+          DebugLogger.log('TELEGRAM', 'Message sent successfully');
         } else {
-          console.warn('⚠️ [TELEGRAM-DEBUG] Telegram API returned:', result?.error || 'unknown');
+          DebugLogger.warn('TELEGRAM', 'Telegram API returned', { error: result?.error || 'unknown' });
         }
       } catch (sendError) {
-        console.error('❌ [TELEGRAM-DEBUG] sendMessage exception:', sendError.message);
+        DebugLogger.error('TELEGRAM', 'sendMessage exception', sendError);
         // Fallback: mensaje simple sin formato
         await this.telegramService.sendMessage(
           chatId,
@@ -128,7 +143,7 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
         ).catch(() => {});
       }
     } catch (error) {
-      console.error('❌ [TELEGRAM-DEBUG] Error en handleStatus (FSE o formato):', error.message);
+      DebugLogger.error('TELEGRAM', 'Error en handleStatus (FSE o formato)', error);
       const errorMsg = '⚠️ Servicio temporalmente no disponible. Intenta en unos minutos.';
       await this.telegramService.sendMessage(chatId, errorMsg);
     }
@@ -140,7 +155,7 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
    */
   async handleFleet(chatId) {
     try {
-      console.log('🔍 [FLEET-DEBUG] Starting fleet status request');
+      DebugLogger.log('TELEGRAM', 'Starting fleet status request');
       
       // Lista estática de tus aviones (fallback si FSE falla)
       const aircrafts = [
@@ -154,9 +169,9 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       try {
         // Nota: FSEconomy NO tiene endpoint público simple para "mis aviones"
         // Usamos datos estáticos + ubicación manual si es necesario
-        console.log('ℹ️ [FLEET-DEBUG] Using static aircraft list (FSE aircraft endpoint not available)');
+        DebugLogger.log('TELEGRAM', 'Using static aircraft list (FSE aircraft endpoint not available)');
       } catch (fseError) {
-        console.warn('⚠️ [FLEET-DEBUG] FSE aircraft data unavailable, using static list');
+        DebugLogger.warn('TELEGRAM', 'FSE aircraft data unavailable, using static list', fseError);
       }
 
       // Construir mensaje con datos disponibles
@@ -176,15 +191,15 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       const result = await this.telegramService.sendMessage(chatId, message);
       
       if (!result.ok) {
-        console.warn('⚠️ [FLEET-DEBUG] sendMessage returned not-ok:', result.error);
+        DebugLogger.warn('TELEGRAM', 'sendMessage returned not-ok', { error: result.error });
         // Intentar fallback
         await this.telegramService.sendFallbackMessage?.(chatId, result.error);
       }
       
-      console.log('✅ [FLEET-DEBUG] Fleet message sent successfully');
+      DebugLogger.log('TELEGRAM', 'Fleet message sent successfully');
       
     } catch (error) {
-      console.error('❌ [FLEET-DEBUG] Unexpected error:', error.message);
+      DebugLogger.error('TELEGRAM', 'Unexpected error in handleFleet', error);
       // Fallback seguro: nunca dejar al usuario sin respuesta
       await this.telegramService.sendMessage(
         chatId,
@@ -207,6 +222,7 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 
       await this.telegramService.sendMessage(chatId, formattedText);
     } catch (error) {
+      DebugLogger.error('TELEGRAM', 'Error en handleAlerts', error);
       const errorMsg = '⚠️ Servicio temporalmente no disponible. Intenta en unos minutos.';
       await this.telegramService.sendMessage(chatId, errorMsg);
     }
@@ -276,14 +292,12 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
    * @param {Array} fbos - Array de FBOs
    * @returns {string} Texto formateado
    */
-  _formatFBOList(fbos) {
+  _formatFBOList(fbos, feesByFbo = {}) {
     if (!fbos || fbos.length === 0) {
       return 'ℹ️ No se encontraron FBOs.';
     }
 
-    // 🔍 [TELEGRAM-DEBUG] Formatting FBO list message...
-    console.log('🔍 [TELEGRAM-DEBUG] Formatting FBO list message...');
-    console.log('🔍 [TELEGRAM-DEBUG] FBOs count:', fbos.length);
+    DebugLogger.log('TELEGRAM', 'Formatting FBO list message', { count: fbos?.length });
 
     let message = `🏢 <b>Estado de FBOs ZAM-AIR</b>\n\n`;
 
@@ -293,7 +307,9 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       const suppliesPerDay = fbo.suppliesPerDay ?? 0;
       const daysOfSupplies = fbo.daysOfSupplies; // Puede ser null si suppliesPerDay es 0
       const fuelJetA = fbo.fuelJetA ?? 0;
-      const groundCrewFees = fbo.groundCrewFees ?? 0;
+      
+      // ✅ Usar fees reales si existen, sino $0
+      const fees = feesByFbo[fbo.icao] ?? 0;
       
       // ✅ CORRECCIÓN: Validar antes de llamar a toFixed()
       const suppliesDays = (daysOfSupplies !== null && daysOfSupplies !== undefined) 
@@ -308,7 +324,7 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       // ✅ CORRECCIÓN: Usar toLocaleString solo si es número válido
       const suppliesFormatted = typeof supplies === 'number' ? supplies.toLocaleString() : '0';
       const fuelFormatted = typeof fuelJetA === 'number' ? fuelJetA.toLocaleString() : '0';
-      const feesFormatted = typeof groundCrewFees === 'number' ? groundCrewFees.toLocaleString() : '0';
+      const feesFormatted = typeof fees === 'number' ? fees.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00';
       
       message += `<b>${fbo.icao ?? 'N/A'}</b> - ${fbo.name ?? 'Sin nombre'}\n`;
       message += `├─ ${suppliesEmoji} Supplies: ${suppliesFormatted} kg (${suppliesDays})\n`;
@@ -316,8 +332,9 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       message += `└─ 💰 Fees: $${feesFormatted}\n\n`;
     }
 
-    console.log('🔍 [TELEGRAM-DEBUG] Final message preview (first 400 chars):');
-    console.log(message.substring(0, 400));
+    if (DebugLogger.isEnabled('TELEGRAM')) {
+      DebugLogger.log('TELEGRAM', 'Final message preview', message.substring(0, 400));
+    }
 
     return message.trim();
   }
