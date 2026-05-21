@@ -1,15 +1,1 @@
-```
-# Environment
-.env.local
-.env.*
-
-# Dependencies
-node_modules/
-
-# Editors
-.vscode/
-
-# Logs and temp files
-*.log
-*.tmp
-```
+(src/jobs/fse-monitor.job.js)
