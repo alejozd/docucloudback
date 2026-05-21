@@ -172,33 +172,63 @@ function parseFlightLogs(parsed) {
 }
 
 function parseStatistics(parsed) {
-  DebugLogger.log('PARSER', 'parseStatistics() called', { rootKeys: Object.keys(parsed || {}) });
+  DebugLogger.log('PARSER', 'parseStatistics() called', {
+    rootKeys: Object.keys(parsed || {}),
+    hasXmlns: !!parsed?.$?.xmlns
+  });
 
-  // FSE puede devolver: <Statistics>...</Statistics> o <statistics>...</statistics>
-  const stats = parsed?.Statistics || parsed?.statistics || parsed?.StatisticsItem || parsed;
-
-  if (!stats || typeof stats !== 'object') {
-    DebugLogger.warn('PARSER', 'No statistics data found');
+  // ✅ Estructura real: <StatisticItems><Statistic>...</Statistic></StatisticItems>
+  const statItems = parsed?.StatisticItems || parsed?.statisticItems;
+  if (!statItems) {
+    DebugLogger.warn('PARSER', 'No <StatisticItems> found', { availableKeys: Object.keys(parsed || {}) });
     return {};
   }
 
+  const statistic = statItems.Statistic || statItems.statistic;
+  if (!statistic) {
+    DebugLogger.warn('PARSER', 'No <Statistic> found inside <StatisticItems>');
+    return {};
+  }
+
+  // ✅ Helper para parsear tiempo HH:MM → horas decimales
+  const parseTimeHHMM = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    return hours + (minutes / 60);
+  };
+
+  // ✅ Mapear campos reales de FSEconomy → formato camelCase para frontend
   return {
-    TotalHours: stats.TotalHours || stats.totalhours || stats.Hours || null,
-    TotalEarnings: stats.TotalEarnings || stats.totalearnings || stats.Earnings || null,
-    TotalFlights: stats.TotalFlights || stats.totalflights || stats.Flights || null,
-    TotalDistance: stats.TotalDistance || stats.totaldistance || stats.Distance || null,
-    MemberSince: stats.MemberSince || stats.membersince || stats.Joined || null,
-    LastFlight: stats.LastFlight || stats.lastflight || stats.LastActivity || null,
-    AverageFlightTime: stats.AverageFlightTime || stats.averageflighttime || null,
-    LongestFlight: stats.LongestFlight || stats.longestflight || null,
-    ...Object.keys(stats).reduce((acc, key) => {
-      if (!['TotalHours', 'TotalEarnings', 'TotalFlights', 'TotalDistance', 'MemberSince', 'LastFlight', 'AverageFlightTime', 'LongestFlight'].includes(key)) {
-        acc[key] = stats[key];
+    // Campos financieros (útiles para dashboard futuro)
+    personalBalance: parseFloat(statistic.Personal_balance) || 0,
+    bankBalance: parseFloat(statistic.Bank_balance) || 0,
+
+    // Campos de estadísticas de vuelo (los que muestra el dashboard)
+    totalFlights: parseInt(statistic.flights, 10) || 0,
+
+    // Total_Miles → convertir a nautical miles si es necesario (1 mile ≈ 0.868976 nm)
+    // Por ahora mantenemos el valor original y etiquetamos
+    totalMiles: parseInt(statistic.Total_Miles, 10) || 0,
+    totalDistance: parseFloat((parseInt(statistic.Total_Miles, 10) || 0) * 0.868976) || 0, // ≈ nm
+
+    // Time_Flown en formato HH:MM → horas decimales
+    timeFlownRaw: statistic.Time_Flown || null,
+    totalHours: parseTimeHHMM(statistic.Time_Flown) || 0,
+
+    // Metadata
+    account: statistic.$?.account || null,
+
+    // Incluir cualquier campo adicional que FSE pueda agregar en el futuro
+    ...Object.keys(statistic).reduce((acc, key) => {
+      if (!['Personal_balance', 'Bank_balance', 'flights', 'Total_Miles', 'Time_Flown', '$'].includes(key)) {
+        acc[key] = statistic[key];
       }
       return acc;
     }, {})
   };
 }
+
 
 /**
  * Parsea respuesta de pagos (payments endpoint)
