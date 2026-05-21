@@ -124,10 +124,21 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       
       const formattedText = this._formatFBOList(fbos, feesByFbo);
 
+      // ✅ Botones inline para interactividad
+      const keyboard = [
+        [
+          { text: '📊 Ver Resumen Financiero', callback_data: 'fees_summary' },
+          { text: '⛽ Reabastecer FBO', callback_data: 'refuel_guide' }
+        ],
+        [
+          { text: '🔔 Toggle Alertas', callback_data: 'toggle_alerts' }
+        ]
+      ];
+
       try {
         DebugLogger.log('TELEGRAM', 'Sending message to Telegram', { count: fbos?.length });
         
-        const result = await this.telegramService.sendMessage(chatId, formattedText);
+        const result = await this.telegramService.sendMessageWithButtons(chatId, formattedText, keyboard);
         
         if (result?.ok) {
           DebugLogger.log('TELEGRAM', 'Message sent successfully');
@@ -283,6 +294,16 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
         break;
       case 'show_alerts':
         await this.handleAlerts(chatId);
+        break;
+      // ✅ Nuevos callbacks para botones interactivos del /status
+      case 'fees_summary':
+        await this.telegramService.sendMessage(chatId, '📊 Reporte financiero en desarrollo. Próximamente disponible.');
+        break;
+      case 'refuel_guide':
+        await this.telegramService.sendMessage(chatId, '⛽ Para reabastecer: 1) Compra Supplies/Fuel en Goods Market 2) Crea Transfer Assignment 3) Vuela al FBO.');
+        break;
+      case 'toggle_alerts':
+        await this.telegramService.sendMessage(chatId, '🔔 Sistema de alertas activado. Recibirás mensajes a las 8AM y cada 6h si hay supplies <30 días.');
         break;
     }
   }

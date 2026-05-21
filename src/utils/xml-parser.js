@@ -24,6 +24,13 @@ async function parseFSEXml(xmlString, type) {
     // 🔍 DEBUG: Logear estructura parseada
     DebugLogger.log('PARSER', 'Parsed root keys', Object.keys(result || {}));
 
+    // ✅ Manejar respuestas de error de FSEconomy (<Error> tag)
+    if (result?.Error || result?.error) {
+      const errorMsg = result.Error || result.error;
+      DebugLogger.warn('PARSER', 'FSE returned error response', { error: errorMsg });
+      return type === 'fbos' ? [] : {}; // Retornar vacío seguro según tipo
+    }
+
     switch (type) {
       case 'fbos':
         return parseFBOs(result);
