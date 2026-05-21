@@ -1,1 +1,1 @@
-Nothing needs to be added to .gitignore since the changes only include JavaScript source files (.js) which are legitimate source code files that should be tracked in version control.
+(src/services/fseconomy.service.js)
