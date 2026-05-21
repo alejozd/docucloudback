@@ -108,5 +108,44 @@ class FSEMonitorJob {
   }
 }
 
-// ✅ Exportar la clase (no una instancia)
-module.exports = FSEMonitorJob;
+// Instancia única del job
+let fseMonitorInstance = null;
+
+/**
+ * Inicializa el job de monitoreo FSE
+ * @returns {boolean} true si se inicializó correctamente
+ */
+function initialize() {
+  try {
+    // Verificar si Telegram está habilitado
+    if (!global.telegramEnabled) {
+      DebugLogger.log('JOBS', 'FSE Monitor skipped (Telegram not enabled)');
+      return false;
+    }
+    
+    fseMonitorInstance = new FSEMonitorJob();
+    DebugLogger.log('JOBS', 'FSE Monitor initialized');
+    return true;
+  } catch (error) {
+    DebugLogger.error('JOBS', 'Error initializing FSE Monitor', error);
+    return false;
+  }
+}
+
+/**
+ * Inicia todos los jobs programados
+ */
+function startAllJobs() {
+  if (!fseMonitorInstance) {
+    DebugLogger.log('JOBS', 'Cannot start jobs: instance not initialized');
+    return;
+  }
+  fseMonitorInstance.start();
+}
+
+// ✅ Exportar la clase Y las funciones helper
+module.exports = {
+  FSEMonitorJob,
+  initialize,
+  startAllJobs
+};
