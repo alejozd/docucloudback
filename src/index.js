@@ -71,6 +71,7 @@ const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 const licenciaRoutes = require("./routes/licenciaRoutes");
 const telegramRoutes = require("./routes/telegram.routes");
+const apiRoutes = require("./routes/api.routes");
 
 // Configurar Express
 const app = express();
@@ -164,6 +165,8 @@ app.use(
 app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
 app.use("/api", licenciaRoutes);
+app.use("/api", apiRoutes);
+console.log('✅ REST API routes mounted at /api');
 
 // Montar ruta de Telegram Bot (solo si está habilitado)
 if (global.telegramEnabled) {
