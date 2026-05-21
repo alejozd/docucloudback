@@ -5,7 +5,7 @@ const DebugLogger = require('./debug-logger');
 /**
  * Parsea respuestas XML de FSEconomy Data Feeds
  * @param {string} xmlString - Respuesta XML cruda de FSEconomy
- * @param {'fbos'|'aircraft'|'payments'} type - Tipo de consulta
+ * @param {'fbos'|'aircraft'|'payments'|'flightlogs'|'statistics'} type - Tipo de consulta
  * @returns {Array|Object} Datos parseados en JSON
  */
 async function parseFSEXml(xmlString, type) {
@@ -38,6 +38,10 @@ async function parseFSEXml(xmlString, type) {
         return parseAircraft(result);
       case 'payments':
         return parsePayments(result);
+      case 'flightlogs':
+        return parseFlightLogs(result);
+      case 'statistics':
+        return parseStatistics(result);
       default:
         return result;
     }
@@ -123,9 +127,108 @@ function parseFBOs(parsed) {
  * Parsea respuesta de aeronaves (estructura similar, implementar según necesidad)
  */
 function parseAircraft(parsed) {
-  DebugLogger.log('PARSER', 'parseAircraft() called - not implemented yet');
-  return parsed;
+  DebugLogger.log('PARSER', 'parseAircraft() called');
+
+  const aircraftItems = parsed?.AircraftItems || parsed?.aircraftItems || parsed;
+  if (!aircraftItems) return [];
+
+  let list = aircraftItems.Aircraft || aircraftItems.aircraft || [];
+  if (!Array.isArray(list)) list = list ? [list] : [];
+
+  return list.map((ac) => ({
+    Registration: ac.Registration || ac.registration,
+    MakeModel: ac.MakeModel || ac.makemodel,
+    Location: ac.Location || ac.location,
+    HomeBase: ac.HomeBase || ac.homebase,
+    FuelLevel: ac.FuelLevel || ac.fuellevel,
+    EngineHours: ac.EngineHours || ac.enginehours,
+    HoursTo100Hr: ac.HoursTo100Hr || ac.hoursTo100Hr,
+    RentalPrice: ac.RentalPrice || ac.rentalprice,
+    MonthlyFee: ac.MonthlyFee || ac.monthlyfee,
+    Status: ac.Status || ac.status,
+    Assignments: ac.Assignments || ac.assignments,
+  }));
 }
+
+function parseFlightLogs(parsed) {
+  DebugLogger.log('PARSER', 'parseFlightLogs() called');
+
+  const logsItems = parsed?.FlightLogItems || parsed?.flightLogItems || parsed;
+  if (!logsItems) return [];
+
+  let list = logsItems.FlightLog || logsItems.flightlog || [];
+  if (!Array.isArray(list)) list = list ? [list] : [];
+
+  return list.map((log) => ({
+    Date: log.Date || log.date,
+    Aircraft: log.Aircraft || log.aircraft,
+    DepartureIcao: log.DepartureIcao || log.from,
+    ArrivalIcao: log.ArrivalIcao || log.to,
+    Duration: log.Duration || log.duration,
+    Earnings: log.Earnings || log.earnings,
+    Assignments: log.Assignments || log.assignments,
+    Distance: log.Distance || log.distance,
+  }));
+}
+
+function parseStatistics(parsed) {
+  DebugLogger.log('PARSER', 'parseStatistics() called', {
+    rootKeys: Object.keys(parsed || {}),
+    hasXmlns: !!parsed?.$?.xmlns
+  });
+
+  // ✅ Estructura real: <StatisticItems><Statistic>...</Statistic></StatisticItems>
+  const statItems = parsed?.StatisticItems || parsed?.statisticItems;
+  if (!statItems) {
+    DebugLogger.warn('PARSER', 'No <StatisticItems> found', { availableKeys: Object.keys(parsed || {}) });
+    return {};
+  }
+
+  const statistic = statItems.Statistic || statItems.statistic;
+  if (!statistic) {
+    DebugLogger.warn('PARSER', 'No <Statistic> found inside <StatisticItems>');
+    return {};
+  }
+
+  // ✅ Helper para parsear tiempo HH:MM → horas decimales
+  const parseTimeHHMM = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    return hours + (minutes / 60);
+  };
+
+  // ✅ Mapear campos reales de FSEconomy → formato camelCase para frontend
+  return {
+    // Campos financieros (útiles para dashboard futuro)
+    personalBalance: parseFloat(statistic.Personal_balance) || 0,
+    bankBalance: parseFloat(statistic.Bank_balance) || 0,
+
+    // Campos de estadísticas de vuelo (los que muestra el dashboard)
+    totalFlights: parseInt(statistic.flights, 10) || 0,
+
+    // Total_Miles → convertir a nautical miles si es necesario (1 mile ≈ 0.868976 nm)
+    // Por ahora mantenemos el valor original y etiquetamos
+    totalMiles: parseInt(statistic.Total_Miles, 10) || 0,
+    totalDistance: parseFloat((parseInt(statistic.Total_Miles, 10) || 0) * 0.868976) || 0, // ≈ nm
+
+    // Time_Flown en formato HH:MM → horas decimales
+    timeFlownRaw: statistic.Time_Flown || null,
+    totalHours: parseTimeHHMM(statistic.Time_Flown) || 0,
+
+    // Metadata
+    account: statistic.$?.account || null,
+
+    // Incluir cualquier campo adicional que FSE pueda agregar en el futuro
+    ...Object.keys(statistic).reduce((acc, key) => {
+      if (!['Personal_balance', 'Bank_balance', 'flights', 'Total_Miles', 'Time_Flown', '$'].includes(key)) {
+        acc[key] = statistic[key];
+      }
+      return acc;
+    }, {})
+  };
+}
+
 
 /**
  * Parsea respuesta de pagos (payments endpoint)

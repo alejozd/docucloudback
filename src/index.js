@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 const path = require("path");
 const {
@@ -21,6 +22,7 @@ const {
 
 // Importar validación de entorno para Telegram Bot
 const { validateTelegramEnv } = require("./config/environment");
+const DebugLogger = require("./utils/debug-logger");
 
 // Variable global para trackear si Telegram está habilitado
 global.telegramEnabled = false;
@@ -71,6 +73,7 @@ const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 const licenciaRoutes = require("./routes/licenciaRoutes");
 const telegramRoutes = require("./routes/telegram.routes");
+const apiRoutes = require("./routes/api.routes");
 
 // Configurar Express
 const app = express();
@@ -164,6 +167,33 @@ app.use(
 app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
 app.use("/api", licenciaRoutes);
+
+// 🛡️ Rate Limit: 30 peticiones por IP cada 15 minutos
+const apiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Demasiadas peticiones. Intenta en 15 minutos." },
+});
+
+// 🔑 Middleware API Key
+const apiKeyMiddleware = (req, res, next) => {
+  const providedKey = req.headers["x-api-key"];
+  const expectedKey = process.env.ZAM_API_KEY;
+
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    return res
+      .status(401)
+      .json({ ok: false, error: "API Key requerida o inválida. Usa header: x-api-key" });
+  }
+
+  next();
+};
+
+// Montar rutas con protección
+app.use("/api", apiRateLimiter, apiKeyMiddleware, apiRoutes);
+DebugLogger.log("APP", "✅ API routes mounted at /api with Rate Limit + API Key");
 
 // Montar ruta de Telegram Bot (solo si está habilitado)
 if (global.telegramEnabled) {
