@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 --- .gitignore
 # Examples 1:
 # Project with only source/config files - no artifacts
@@ -55,3 +56,6 @@ htmlcov/
 *.tar.xz
 *.tar.zst
 .DS_Store
+=======
+Nothing needs to be added to the .gitignore file since only a JavaScript source file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
+>>>>>>> 09a9ebc56635b8585bb3b872a69f76977fd09956
