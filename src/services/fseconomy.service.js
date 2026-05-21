@@ -192,9 +192,10 @@ class FSEconomyService {
     try {
       DebugLogger.log('FSE', `Fetching payments for ${month}/${year}`);
       
+      // ✅ Formato month/year esperado por FSE (string con padding)
       const url = this._buildUrl('payments', {
-        month: month,
-        year: year
+        month: String(month).padStart(2, '0'), // "05" en vez de 5
+        year: String(year)
       });
       const xmlData = await this._fetchXml(url);
       
