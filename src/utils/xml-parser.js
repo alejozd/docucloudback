@@ -1,38 +1,31 @@
-const { Parser } = require('xml2js');
+// src/utils/xml-parser.js
+const { parseStringPromise } = require('xml2js');
 
 /**
- * Parser XML para respuestas de FSEconomy Data Feeds
- * Convierte XML a JSON limpio y tipado
+ * Parsea respuestas XML de FSEconomy Data Feeds
+ * @param {string} xmlString - Respuesta XML cruda de FSEconomy
+ * @param {'fbos'|'aircraft'|'payments'} type - Tipo de consulta
+ * @returns {Array|Object} Datos parseados en JSON
  */
-
-// Crear parser con opciones optimizadas para FSEconomy
-const parser = new Parser({
-  explicitArray: false, // No crear arrays si hay un solo elemento
-  mergeAttrs: true,     // Mezclar atributos con elementos
-  explicitRoot: false,  // No incluir el nodo raíz
-  trim: true,           // Eliminar espacios en blanco
-  normalizeTags: false  // NO normalizar tags - FSE usa PascalCase (FboId, Icao, etc.)
-});
-
-/**
- * Parsea XML de FSEconomy a JSON según el tipo de consulta
- * @param {string} xmlString - XML crudo de FSEconomy
- * @param {string} type - Tipo de dato: 'fbos', 'aircraft', 'payments'
- * @returns {Promise<Array|Object>} JSON limpio y tipado
- */
-const parseFSEXml = async (xmlString, type) => {
+async function parseFSEXml(xmlString, type) {
   try {
-    // Debug log temporal para validar XML recibido
-    console.log('🔍 FSE Raw XML (first 300 chars):', xmlString.substring(0, 300));
-    
-    const result = await parser.parseStringPromise(xmlString);
-    
-    // Manejar diferentes estructuras de respuesta
+    // 🔍 DEBUG: Logear entrada para diagnóstico
+    console.log('🔍 [XML-PARSER] Input type:', type, '| XML length:', xmlString?.length || 0);
+    console.log('🔍 [XML-PARSER] XML preview:', xmlString?.substring(0, 200));
+
+    const result = await parseStringPromise(xmlString, {
+      explicitArray: false,  // Evita arrays innecesarios para un solo elemento
+      mergeAttrs: true,      // Combina atributos con elementos
+      trim: true,            // Elimina espacios extra
+      explicitRoot: true     // Mantiene el nodo raíz
+    });
+
+    // 🔍 DEBUG: Logear estructura parseada
+    console.log('🔍 [XML-PARSER] Parsed root keys:', Object.keys(result || {}));
+
     switch (type) {
       case 'fbos':
-        const fbos = parseFBOs(result);
-        console.log('✅ Parsed', fbos.length, 'FBOs:', fbos.map(f => f.icao));
-        return fbos;
+        return parseFBOs(result);
       case 'aircraft':
         return parseAircraft(result);
       case 'payments':
@@ -41,96 +34,99 @@ const parseFSEXml = async (xmlString, type) => {
         return result;
     }
   } catch (error) {
-    console.error('❌ Error parsing FSE XML:', error.message);
-    throw new Error(`Failed to parse FSE XML: ${error.message}`);
+    console.error('❌ [XML-PARSER] Parse error:', error.message);
+    console.error('❌ [XML-PARSER] XML snippet:', xmlString?.substring(0, 300));
+    throw new Error(`XML parse error: ${error.message}`);
   }
-};
+}
 
 /**
- * Parsea respuesta de FBOs
- * @param {Object} data - JSON crudo del parser
- * @returns {Array} Array de FBOs normalizados
+ * Parsea la respuesta de FBOs: <FboItems><FBO>...</FBO></FboItems>
+ * Estructura REAL de FSEconomy (PascalCase, no minúsculas)
  */
-const parseFBOs = (data) => {
-  // Estructura real de FSEconomy: <FboItems><FBO>...</FBO></FboItems>
-  const fboItems = data.FboItems;
-  if (!fboItems) return [];
+function parseFBOs(parsed) {
+  console.log('🔍 [PARSE-FBOs] Input parsed keys:', Object.keys(parsed || {}));
   
+  // ✅ Estructura real: { FboItems: { FBO: [...] } } o { FboItems: { FBO: {...} } }
+  const fboItems = parsed?.FboItems;
+  
+  if (!fboItems) {
+    console.warn('⚠️ [PARSE-FBOs] No <FboItems> found. Available keys:', Object.keys(parsed || {}));
+    return [];
+  }
+
   let fboList = fboItems.FBO;
-  if (!fboList) return [];
   
-  // Normalizar a array cuando hay un solo FBO (explicitArray: false)
+  // Manejar caso de un solo FBO (xml2js con explicitArray: false devuelve objeto, no array)
+  if (!fboList) {
+    console.warn('⚠️ [PARSE-FBOs] No <FBO> found inside <FboItems>');
+    return [];
+  }
+  
+  // Normalizar a array si es un solo objeto
   if (!Array.isArray(fboList)) {
+    console.log('🔍 [PARSE-FBOs] Single FBO detected, normalizing to array');
     fboList = [fboList];
   }
   
-  // Filtrar y mapear campos en PascalCase según estructura real de FSE
-  return fboList
-    .filter(fbo => fbo && fbo.Icao)
-    .map(fbo => ({
+  console.log('🔍 [PARSE-FBOs] Processing', fboList.length, 'FBO(s)');
+
+  const result = fboList.map((fbo, index) => {
+    console.log(`🔍 [PARSE-FBOs] FBO #${index + 1} keys:`, Object.keys(fbo || {}));
+    
+    return {
+      // Mapear campos PascalCase → camelCase para consistencia interna
       fboId: parseInt(fbo.FboId) || null,
-      icao: fbo.Icao || '',
-      name: fbo.Name || 'Unknown',
+      status: fbo.Status,
+      airport: fbo.Airport,
+      name: fbo.Name,
+      owner: fbo.Owner,
+      icao: fbo.Icao,                    // ← Clave para identificar FBOs
+      location: fbo.Location,
+      lots: parseInt(fbo.Lots) || 0,
+      repairShop: fbo.RepairShop === 'Yes',
+      gates: parseInt(fbo.Gates) || 0,
+      gatesRented: parseInt(fbo.GatesRented) || 0,
+      fuel100LL: parseFloat(fbo.Fuel100LL) || 0,
+      fuelJetA: parseFloat(fbo.FuelJetA) || 0,
+      buildingMaterials: parseFloat(fbo.BuildingMaterials) || 0,
       supplies: parseFloat(fbo.Supplies) || 0,
       suppliesPerDay: parseFloat(fbo.SuppliesPerDay) || 0,
+      // Calcular días restantes de supplies (campo clave para alertas)
       daysOfSupplies: fbo.SuppliesPerDay > 0 
-        ? parseFloat(fbo.Supplies) / parseFloat(fbo.SuppliesPerDay) 
+        ? parseFloat(fbo.Supplies) / parseFloat(fbo.SuppliesPerDay)
         : null,
-      fuelJetA: parseFloat(fbo.FuelJetA) || 0,
-      fuel100LL: parseFloat(fbo.Fuel100LL) || 0,
-      status: fbo.Status || 'unknown',
-      groundCrewFees: parseFloat(fbo.GroundCrewFees) || 0,
-      location: fbo.Location || ''
-    }));
-};
+      suppliedDays: parseInt(fbo.SuppliedDays) || 0,
+      sellPrice: parseFloat(fbo.SellPrice) || 0,
+      fuel100LLGal: parseFloat(fbo.Fuel100LLGal) || 0,
+      fuelJetAGal: parseFloat(fbo.FuelJetAGal) || 0,
+      price100LLGal: parseFloat(fbo.Price100LLGal) || 0,
+      priceJetAGal: parseFloat(fbo.PriceJetAGal) || 0,
+      // Ground crew fees: FSE no lo devuelve en este endpoint; se puede calcular aparte si es necesario
+      groundCrewFees: 0
+    };
+  });
+
+  console.log('✅ [PARSE-FBOs] Returning', result.length, 'parsed FBOs');
+  console.log('✅ [PARSE-FBOs] ICAOs:', result.map(f => f.icao).join(', '));
+  
+  return result;
+}
 
 /**
- * Parsea respuesta de aeronaves
- * @param {Object} data - JSON crudo del parser
- * @returns {Array} Array de aeronaves normalizadas
+ * Parsea respuesta de aeronaves (estructura similar, implementar según necesidad)
  */
-const parseAircraft = (data) => {
-  let aircraft = data.aircraft || data.Aircraft || [];
-  
-  if (!Array.isArray(aircraft)) {
-    aircraft = [aircraft];
-  }
-  
-  return aircraft
-    .filter(ac => ac && ac.registration)
-    .map(ac => ({
-      registration: ac.registration || '',
-      type: ac.type || '',
-      status: ac.status || 'unknown',
-      location: ac.location || '',
-      lastFlight: ac.lastFlight || null,
-      totalHours: parseFloat(ac.totalHours) || 0,
-      engineHours: parseFloat(ac.engineHours) || 0,
-      nextInspection: ac.nextInspection || null
-    }));
-};
+function parseAircraft(parsed) {
+  console.log('🔍 [PARSE-AIRCRAFT] Not implemented yet');
+  return parsed;
+}
 
 /**
- * Parsea respuesta de pagos
- * @param {Object} data - JSON crudo del parser
- * @returns {Array} Array de pagos normalizados
+ * Parsea respuesta de pagos (estructura similar, implementar según necesidad)
  */
-const parsePayments = (data) => {
-  let payments = data.payment || data.Payment || [];
-  
-  if (!Array.isArray(payments)) {
-    payments = [payments];
-  }
-  
-  return payments
-    .filter(p => p && p.date)
-    .map(p => ({
-      date: p.date || '',
-      amount: parseFloat(p.amount) || 0,
-      description: p.description || '',
-      currency: p.currency || 'USD',
-      reference: p.reference || ''
-    }));
-};
+function parsePayments(parsed) {
+  console.log('🔍 [PARSE-PAYMENTS] Not implemented yet');
+  return parsed;
+}
 
 module.exports = { parseFSEXml };
