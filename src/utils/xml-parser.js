@@ -11,7 +11,7 @@ const parser = new Parser({
   mergeAttrs: true,     // Mezclar atributos con elementos
   explicitRoot: false,  // No incluir el nodo raíz
   trim: true,           // Eliminar espacios en blanco
-  normalizeTags: true   // Normalizar nombres de tags
+  normalizeTags: false  // NO normalizar tags - FSE usa PascalCase (FboId, Icao, etc.)
 });
 
 /**
@@ -22,12 +22,17 @@ const parser = new Parser({
  */
 const parseFSEXml = async (xmlString, type) => {
   try {
+    // Debug log temporal para validar XML recibido
+    console.log('🔍 FSE Raw XML (first 300 chars):', xmlString.substring(0, 300));
+    
     const result = await parser.parseStringPromise(xmlString);
     
     // Manejar diferentes estructuras de respuesta
     switch (type) {
       case 'fbos':
-        return parseFBOs(result);
+        const fbos = parseFBOs(result);
+        console.log('✅ Parsed', fbos.length, 'FBOs:', fbos.map(f => f.icao));
+        return fbos;
       case 'aircraft':
         return parseAircraft(result);
       case 'payments':
@@ -47,28 +52,35 @@ const parseFSEXml = async (xmlString, type) => {
  * @returns {Array} Array de FBOs normalizados
  */
 const parseFBOs = (data) => {
-  // FSE puede devolver un solo FBO o un array
-  let fbos = data.fbo || data.FBO || data;
+  // Estructura real de FSEconomy: <FboItems><FBO>...</FBO></FboItems>
+  const fboItems = data.FboItems;
+  if (!fboItems) return [];
   
-  // Si es un solo objeto, convertirlo a array
-  if (!Array.isArray(fbos)) {
-    fbos = [fbos];
+  let fboList = fboItems.FBO;
+  if (!fboList) return [];
+  
+  // Normalizar a array cuando hay un solo FBO (explicitArray: false)
+  if (!Array.isArray(fboList)) {
+    fboList = [fboList];
   }
   
-  // Filtrar elementos vacíos o inválidos
-  return fbos
-    .filter(fbo => fbo && fbo.icao)
+  // Filtrar y mapear campos en PascalCase según estructura real de FSE
+  return fboList
+    .filter(fbo => fbo && fbo.Icao)
     .map(fbo => ({
-      icao: fbo.icao || '',
-      name: fbo.name || 'Unknown',
-      supplies: parseInt(fbo.supplies) || 0,
-      dailyConsumption: parseFloat(fbo.dailyConsumption) || 0,
-      groundCrewFees: parseFloat(fbo.groundCrewFees) || 0,
-      fuelStatus: fbo.fuelStatus || 'unknown',
-      // Calcular días de suministros restantes
-      daysOfSupplies: fbo.dailyConsumption > 0 
-        ? Math.round(fbo.supplies / fbo.dailyConsumption) 
-        : 999
+      fboId: parseInt(fbo.FboId) || null,
+      icao: fbo.Icao || '',
+      name: fbo.Name || 'Unknown',
+      supplies: parseFloat(fbo.Supplies) || 0,
+      suppliesPerDay: parseFloat(fbo.SuppliesPerDay) || 0,
+      daysOfSupplies: fbo.SuppliesPerDay > 0 
+        ? parseFloat(fbo.Supplies) / parseFloat(fbo.SuppliesPerDay) 
+        : null,
+      fuelJetA: parseFloat(fbo.FuelJetA) || 0,
+      fuel100LL: parseFloat(fbo.Fuel100LL) || 0,
+      status: fbo.Status || 'unknown',
+      groundCrewFees: parseFloat(fbo.GroundCrewFees) || 0,
+      location: fbo.Location || ''
     }));
 };
 
