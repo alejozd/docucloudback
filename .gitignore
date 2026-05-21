@@ -1,1 +1,1 @@
-(src/controllers/telegram.controller.js)
+Nothing needs to be added to the .gitignore file since only JavaScript source files were modified and no build artifacts, dependencies, or temporary files were included in the changes.
