@@ -141,16 +141,35 @@ class FSEconomyService {
       });
 
       const stats = await parseFSEXml(response.data, 'statistics');
+
+      // ✅ CORRECCIÓN: El parser ahora devuelve campos en camelCase
+      // Mapear los campos reales que parseStatistics() devuelve
       const normalized = {
-        totalHours: parseFloat(stats.TotalHours || stats.totalhours || stats.hours || 0),
-        totalEarnings: parseFloat(stats.TotalEarnings || stats.totalearnings || stats.earnings || 0),
-        totalFlights: parseInt(stats.TotalFlights || stats.totalflights || stats.flights || 0, 10),
-        totalDistance: parseFloat(stats.TotalDistance || stats.totaldistance || stats.distance || 0),
-        memberSince: stats.MemberSince || stats.membersince || stats.joined || null,
-        lastFlight: stats.LastFlight || stats.lastflight || stats.last_activity || null,
-        averageFlightTime: stats.AverageFlightTime ? parseFloat(stats.AverageFlightTime) : null,
-        longestFlight: stats.LongestFlight ? parseFloat(stats.LongestFlight) : null
+        // Campos principales para dashboard KPIs
+        totalHours: parseFloat(stats.totalHours) || 0,
+        totalFlights: parseInt(stats.totalFlights, 10) || 0,
+        totalDistance: parseFloat(stats.totalDistance) || 0,
+
+        // Campos adicionales útiles para dashboard financiero
+        totalMiles: parseInt(stats.totalMiles, 10) || 0,
+        personalBalance: parseFloat(stats.personalBalance) || 0,
+        bankBalance: parseFloat(stats.bankBalance) || 0,
+
+        // Metadata
+        timeFlownRaw: stats.timeFlownRaw || null,
+        account: stats.account || null,
+
+        // Mantener compatibilidad con campos que podrían llegar en el futuro
+        ...(stats.memberSince && { memberSince: stats.memberSince }),
+        ...(stats.lastFlight && { lastFlight: stats.lastFlight })
       };
+
+      DebugLogger.log('FSE', 'Statistics normalized', {
+        totalHours: normalized.totalHours,
+        totalFlights: normalized.totalFlights,
+        totalDistance: normalized.totalDistance
+      });
+
       return normalized;
     } catch (error) {
       DebugLogger.error('FSE', 'Error en getStatistics', error);
