@@ -106,10 +106,37 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       await this.telegramService.sendMessage(chatId, '⏳ Consultando FSEconomy...');
 
       const fbos = await this.fseconomyService.getMyFBOs();
+      
+      // 🔍 DEBUG: Logear EXACTAMENTE qué se va a enviar a Telegram
+      console.log('🔍 [TELEGRAM-DEBUG] Formatting FBO list message...');
+      console.log('🔍 [TELEGRAM-DEBUG] FBOs count:', fbos.length);
+      console.log('🔍 [TELEGRAM-DEBUG] First FBO sample:', JSON.stringify(fbos[0], null, 2));
+
       const formattedText = this._formatFBOList(fbos);
 
-      await this.telegramService.sendMessage(chatId, formattedText);
+      console.log('🔍 [TELEGRAM-DEBUG] Final message preview (first 300 chars):', formattedText.substring(0, 300));
+      console.log('🔍 [TELEGRAM-DEBUG] About to call telegram.sendMessage()...');
+
+      try {
+        // ✅ CORRECCIÓN: Asegurar await + catch específico para el sendMessage
+        await this.telegramService.sendMessage(chatId, formattedText);
+        console.log('✅ [TELEGRAM-DEBUG] sendMessage SUCCESS - Message delivered');
+        console.log('✅ [TELEGRAM-DEBUG] Response flow completed for /status');
+      } catch (sendError) {
+        console.error('❌ [TELEGRAM-DEBUG] sendMessage FAILED:', {
+          name: sendError.name,
+          message: sendError.message,
+          code: sendError.code,
+          response: sendError.response?.data
+        });
+        // Solo enviar mensaje de error de fallback si el sendMessage falla
+        await this.telegramService.sendMessage(
+          chatId, 
+          '❌ Error enviando respuesta. Intenta más tarde.'
+        ).catch(console.error); // Evitar error en cascada
+      }
     } catch (error) {
+      console.error('❌ [TELEGRAM-DEBUG] Error en handleStatus (FSE o formato):', error.message);
       const errorMsg = '⚠️ Servicio temporalmente no disponible. Intenta en unos minutos.';
       await this.telegramService.sendMessage(chatId, errorMsg);
     }
