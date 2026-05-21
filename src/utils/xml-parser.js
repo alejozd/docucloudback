@@ -1,5 +1,6 @@
 // src/utils/xml-parser.js
 const { parseStringPromise } = require('xml2js');
+const DebugLogger = require('./debug-logger');
 
 /**
  * Parsea respuestas XML de FSEconomy Data Feeds
@@ -10,8 +11,8 @@ const { parseStringPromise } = require('xml2js');
 async function parseFSEXml(xmlString, type) {
   try {
     // 🔍 DEBUG: Logear entrada para diagnóstico
-    console.log('🔍 [XML-PARSER] Input type:', type, '| XML length:', xmlString?.length || 0);
-    console.log('🔍 [XML-PARSER] XML preview:', xmlString?.substring(0, 200));
+    DebugLogger.log('PARSER', `Input type: ${type} | XML length: ${xmlString?.length || 0}`);
+    DebugLogger.log('PARSER', 'XML preview', xmlString?.substring(0, 200));
 
     const result = await parseStringPromise(xmlString, {
       explicitArray: false,  // Evita arrays innecesarios para un solo elemento
@@ -21,7 +22,7 @@ async function parseFSEXml(xmlString, type) {
     });
 
     // 🔍 DEBUG: Logear estructura parseada
-    console.log('🔍 [XML-PARSER] Parsed root keys:', Object.keys(result || {}));
+    DebugLogger.log('PARSER', 'Parsed root keys', Object.keys(result || {}));
 
     switch (type) {
       case 'fbos':
@@ -34,8 +35,7 @@ async function parseFSEXml(xmlString, type) {
         return result;
     }
   } catch (error) {
-    console.error('❌ [XML-PARSER] Parse error:', error.message);
-    console.error('❌ [XML-PARSER] XML snippet:', xmlString?.substring(0, 300));
+    DebugLogger.error('PARSER', 'Parse error', error);
     throw new Error(`XML parse error: ${error.message}`);
   }
 }
@@ -45,13 +45,13 @@ async function parseFSEXml(xmlString, type) {
  * Estructura REAL de FSEconomy (PascalCase, no minúsculas)
  */
 function parseFBOs(parsed) {
-  console.log('🔍 [PARSE-FBOs] Input parsed keys:', Object.keys(parsed || {}));
+  DebugLogger.log('PARSER', 'parseFBOs() called', { rootKeys: Object.keys(parsed || {}) });
   
   // ✅ Estructura real: { FboItems: { FBO: [...] } } o { FboItems: { FBO: {...} } }
   const fboItems = parsed?.FboItems;
   
   if (!fboItems) {
-    console.warn('⚠️ [PARSE-FBOs] No <FboItems> found. Available keys:', Object.keys(parsed || {}));
+    DebugLogger.warn('PARSER', 'No <FboItems> found', { availableKeys: Object.keys(parsed || {}) });
     return [];
   }
 
@@ -59,20 +59,20 @@ function parseFBOs(parsed) {
   
   // Manejar caso de un solo FBO (xml2js con explicitArray: false devuelve objeto, no array)
   if (!fboList) {
-    console.warn('⚠️ [PARSE-FBOs] No <FBO> found inside <FboItems>');
+    DebugLogger.log('PARSER', 'No <FBO> found inside <FboItems>');
     return [];
   }
   
   // Normalizar a array si es un solo objeto
   if (!Array.isArray(fboList)) {
-    console.log('🔍 [PARSE-FBOs] Single FBO detected, normalizing to array');
+    DebugLogger.log('PARSER', 'Single FBO detected, normalizing to array');
     fboList = [fboList];
   }
   
-  console.log('🔍 [PARSE-FBOs] Processing', fboList.length, 'FBO(s)');
+  DebugLogger.log('PARSER', `Processing ${fboList.length} FBO(s)`);
 
   const result = fboList.map((fbo, index) => {
-    console.log(`🔍 [PARSE-FBOs] FBO #${index + 1} keys:`, Object.keys(fbo || {}));
+    DebugLogger.log('PARSER', `FBO #${index + 1} keys`, Object.keys(fbo || {}));
     
     return {
       // Mapear campos PascalCase → camelCase para consistencia interna
@@ -107,8 +107,7 @@ function parseFBOs(parsed) {
     };
   });
 
-  console.log('✅ [PARSE-FBOs] Returning', result.length, 'parsed FBOs');
-  console.log('✅ [PARSE-FBOs] ICAOs:', result.map(f => f.icao).join(', '));
+  DebugLogger.log('PARSER', `Returning ${result.length} parsed FBOs`, { ICAOs: result.map(f => f.icao).join(', ') });
   
   return result;
 }
@@ -117,16 +116,44 @@ function parseFBOs(parsed) {
  * Parsea respuesta de aeronaves (estructura similar, implementar según necesidad)
  */
 function parseAircraft(parsed) {
-  console.log('🔍 [PARSE-AIRCRAFT] Not implemented yet');
+  DebugLogger.log('PARSER', 'parseAircraft() called - not implemented yet');
   return parsed;
 }
 
 /**
- * Parsea respuesta de pagos (estructura similar, implementar según necesidad)
+ * Parsea respuesta de pagos (payments endpoint)
+ * Estructura típica: <PaymentItems><Payment>...</Payment></PaymentItems>
  */
 function parsePayments(parsed) {
-  console.log('🔍 [PARSE-PAYMENTS] Not implemented yet');
-  return parsed;
+  DebugLogger.log('PARSER', 'parsePayments() called', { rootKeys: Object.keys(parsed || {}) });
+  
+  // Estructura típica: <PaymentItems><Payment>...</Payment></PaymentItems>
+  const paymentItems = parsed?.PaymentItems || parsed?.paymentItems;
+  if (!paymentItems) {
+    DebugLogger.warn('PARSER', 'No PaymentItems found in response', { availableKeys: Object.keys(parsed || {}) });
+    return [];
+  }
+  
+  let payments = paymentItems.Payment || paymentItems.payment;
+  if (!payments) {
+    DebugLogger.log('PARSER', 'No Payment elements found inside PaymentItems');
+    return [];
+  }
+  if (!Array.isArray(payments)) payments = [payments];
+  
+  DebugLogger.log('PARSER', `Processing ${payments.length} payment(s)`);
+  
+  return payments.map(p => ({
+    // Mapear campos comunes de payments (ajustar según respuesta real de FSE)
+    id: p.PaymentId || p.id,
+    date: p.Date || p.date,
+    type: p.Type || p.type,
+    description: p.Description || p.description,
+    amount: parseFloat(p.Amount || p.amount) || 0,
+    currency: p.Currency || p.currency || 'USD',
+    airportIcao: p.AirportIcao || p.Icao || p.airport,
+    aircraftReg: p.AircraftReg || p.registration,
+  }));
 }
 
 module.exports = { parseFSEXml };

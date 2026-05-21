@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const TelegramService = require('../services/telegram.service');
 const FSEconomyService = require('../services/fseconomy.service');
+const DebugLogger = require('../utils/debug-logger');
 
 /**
  * Jobs programados para monitoreo automático de FSEconomy
@@ -25,7 +26,7 @@ class FSEMonitorJob {
       const fseReadKey = process.env.FSE_READ_KEY;
 
       if (!botToken || !chatId || !fseUserKey || !fseReadKey) {
-        console.warn('⚠️  Variables incompletas para FSE Monitor Job. Jobs no iniciados.');
+        DebugLogger.warn('JOBS', 'Variables incompletas para FSE Monitor Job. Jobs no iniciados.');
         return false;
       }
 
@@ -34,10 +35,10 @@ class FSEMonitorJob {
       this.chatId = chatId;
       this.initialized = true;
 
-      console.log('✅ FSE Monitor Job initialized');
+      DebugLogger.log('JOBS', 'FSE Monitor Job initialized');
       return true;
     } catch (error) {
-      console.error('❌ Error inicializando FSE Monitor Job:', error.message);
+      DebugLogger.error('JOBS', 'Error inicializando FSE Monitor Job', error);
       return false;
     }
   }
@@ -48,141 +49,118 @@ class FSEMonitorJob {
    */
   startAllJobs() {
     if (!this.initialized) {
-      console.warn('⚠️  FSE Monitor Job no inicializado. Skipping jobs.');
+      DebugLogger.warn('JOBS', 'FSE Monitor Job no inicializado. Skipping jobs.');
       return;
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('ℹ️  Jobs solo se ejecutan en production. Skipping.');
+      DebugLogger.log('JOBS', 'Jobs solo se ejecutan en production. Skipping.');
       return;
     }
 
     if (!global.telegramEnabled) {
-      console.log('ℹ️  Telegram no habilitado. Skipping FSE Monitor jobs.');
+      DebugLogger.log('JOBS', 'Telegram no habilitado. Skipping FSE Monitor jobs.');
       return;
     }
 
     // Job 1: Verificación diaria de suministros a las 8:00 AM
     // Cron: Minuto Hora Día Mes DíaSemana
     cron.schedule('0 8 * * *', async () => {
-      console.log('🕐 [JOB] Ejecutando verificación diaria de suministros...');
-      await this.checkDailySupplies();
+      DebugLogger.log('JOBS', 'Ejecutando verificación diaria de suministros...');
+      await this.sendDailySummary();
     }, {
       timezone: 'America/Bogota' // Ajustar según zona horaria
     });
 
     // Job 2: Verificación crítica cada 6 horas
     cron.schedule('0 */6 * * *', async () => {
-      console.log('🕐 [JOB] Ejecutando verificación crítica...');
-      await this.checkCriticalAlerts();
+      DebugLogger.log('JOBS', 'Ejecutando verificación crítica...');
+      await this.checkCriticalSupplies();
     }, {
       timezone: 'America/Bogota'
     });
 
-    console.log('✅ Todos los jobs de FSE Monitor iniciados');
+    DebugLogger.log('JOBS', 'Todos los jobs de FSE Monitor iniciados');
   }
+}
+
+// Exportar instancia singleton
+const fseMonitorJob = new FSEMonitorJob();
+
+module.exports = fseMonitorJob;
 
   /**
-   * Verificación diaria de suministros (8:00 AM)
-   * Alerta si algún FBO tiene menos de 30 días de suministros
+   * Verifica supplies críticos (<30 días) y envía alerta URGENTE
    */
-  async checkDailySupplies() {
+  async checkCriticalSupplies() {
     try {
+      DebugLogger.log('JOBS', 'Running critical supplies check');
+      
       const fbos = await this.fseconomyService.getMyFBOs();
-      const alerts = this.fseconomyService.checkAlerts(fbos);
-
-      let hasAlerts = false;
-      let message = '<b>📊 Reporte Diario de Suministros</b>\n\n';
-
-      // Alertas críticas (< 7 días)
-      if (alerts.critical.length > 0) {
-        hasAlerts = true;
-        message += '🚨 <b>CRÍTICO - Acción Inmediata Requerida</b>\n';
-        alerts.critical.forEach(fbo => {
-          message += `• ${fbo.icao}: <b>${fbo.daysOfSupplies}</b> días restantes (${fbo.supplies.toLocaleString()} gal)\n`;
-        });
-        message += '\n';
+      const critical = fbos.filter(f => f.daysOfSupplies !== null && f.daysOfSupplies < 30);
+      
+      if (critical.length === 0) {
+        DebugLogger.log('JOBS', 'No critical supplies alerts');
+        return;
       }
-
-      // Advertencias (7-30 días)
-      if (alerts.warning.length > 0) {
-        hasAlerts = true;
-        message += '⚠️ <b>ADVERTENCIA - Planear Reabastecimiento</b>\n';
-        alerts.warning.forEach(fbo => {
-          message += `• ${fbo.icao}: <b>${fbo.daysOfSupplies}</b> días restantes (${fbo.supplies.toLocaleString()} gal)\n`;
-        });
-        message += '\n';
+      
+      // Mensaje URGENTE con formato destacado
+      let message = `🔴 <b>ALERTA CRÍTICA - Supplies Bajos</b>\n\n`;
+      message += `<i>Estos FBOs requieren reabastecimiento INMEDIATO:</i>\n\n`;
+      
+      for (const fbo of critical) {
+        const urgency = fbo.daysOfSupplies < 7 ? '🚨 URGENTE' : '⚠️ Pronto';
+        message += `${urgency} <b>${fbo.icao}</b> - ${fbo.name}\n`;
+        message += `   📦 Supplies: ${fbo.supplies.toLocaleString()} kg\n`;
+        message += `   ⏱️ Autonomía: ~${fbo.daysOfSupplies.toFixed(0)} días\n`;
+        message += `   💡 Acción: Reabastecer antes de que se agoten\n\n`;
       }
-
-      // Informativas (30-60 días)
-      if (alerts.info.length > 0) {
-        message += 'ℹ️ <b>INFORMATIVO</b>\n';
-        alerts.info.forEach(fbo => {
-          message += `• ${fbo.icao}: <b>${fbo.daysOfSupplies}</b> días restantes\n`;
-        });
-        message += '\n';
-      }
-
-      // Si todo está bien
-      if (!hasAlerts && alerts.info.length === 0) {
-        message += '✅ ¡Todo en orden! Todos los FBOs tienen suministros adecuados.\n';
-      }
-
-      message += '\n<i>FSE Monitor - Reporte Automático</i>';
-
+      
+      message += `<i>Para reabastecer: usa la app web o vuela supplies al aeropuerto.</i>`;
+      
       await this.telegramService.sendMessage(this.chatId, message);
-      console.log('✅ Reporte diario enviado exitosamente');
+      DebugLogger.log('JOBS', `Sent critical alert for ${critical.length} FBOs`);
+      
     } catch (error) {
-      console.error('❌ Error en checkDailySupplies:', error.message);
-      // Enviar alerta de fallo
-      await this.telegramService.sendAlert(
-        this.chatId,
-        'Error en Reporte Diario',
-        `No se pudo generar el reporte diario: ${error.message}`,
-        'warning'
-      );
+      DebugLogger.error('JOBS', 'Error in checkCriticalSupplies', error);
     }
   }
 
   /**
-   * Verificación crítica cada 6 horas
-   * Solo alerta si hay FBOs con menos de 7 días de suministros
+   * Reporte diario resumen (8:00 AM)
    */
-  async checkCriticalAlerts() {
+  async sendDailySummary() {
     try {
+      DebugLogger.log('JOBS', 'Generating daily summary');
+      
       const fbos = await this.fseconomyService.getMyFBOs();
-      const alerts = this.fseconomyService.checkAlerts(fbos);
-
-      // Solo alertar si hay situación crítica
-      if (alerts.critical.length === 0) {
-        console.log('✅ No hay alertas críticas');
-        return;
+      const totalSupplies = fbos.reduce((sum, f) => sum + (f.supplies || 0), 0);
+      const validDays = fbos.filter(f => f.daysOfSupplies !== null);
+      const avgDays = validDays.length > 0 
+        ? validDays.reduce((sum, f) => sum + f.daysOfSupplies, 0) / validDays.length 
+        : null;
+      
+      let message = `📊 <b>Resumen Diario ZAM-AIR</b> - ${new Date().toLocaleDateString('es-CO')}\n\n`;
+      message += `🏢 FBOs activos: ${fbos.length}\n`;
+      message += `📦 Total supplies: ${totalSupplies.toLocaleString()} kg\n`;
+      message += `⏱️ Promedio autonomía: ${avgDays?.toFixed(0) || 'N/A'} días\n`;
+      
+      // Listar FBOs con <60 días (amarillo)
+      const attention = fbos.filter(f => f.daysOfSupplies !== null && f.daysOfSupplies < 60 && f.daysOfSupplies >= 30);
+      if (attention.length > 0) {
+        message += `\n🟡 <b>Atención requerida:</b>\n`;
+        for (const fbo of attention) {
+          message += `• ${fbo.icao}: ${fbo.daysOfSupplies.toFixed(0)} días\n`;
+        }
       }
-
-      let message = '🚨 <b>ALERTA CRÍTICA DE SUMINISTROS</b>\n\n';
-      message += 'Los siguientes FBOs requieren atención INMEDIATA:\n\n';
-
-      alerts.critical.forEach(fbo => {
-        const urgency = fbo.daysOfSupplies <= 3 ? '🔴 URGENTE' : '⚠️ CRÍTICO';
-        message += `${urgency} ${fbo.icao}\n`;
-        message += `   Días restantes: <b>${fbo.daysOfSupplies}</b>\n`;
-        message += `   Suministros: <b>${fbo.supplies.toLocaleString()}</b> gal\n`;
-        message += `   Consumo diario: <b>${fbo.dailyConsumption.toFixed(1)}</b> gal/día\n\n`;
-      });
-
-      message += '<i>FSE Monitor - Alerta Automática</i>';
-
-      await this.telegramService.sendAlert(
-        this.chatId,
-        'Alerta Crítica de Suministros',
-        `${alerts.critical.length} FBO(s) con suministros críticos`,
-        'critical'
-      );
-
+      
+      message += `\n<i>Próxima verificación crítica: en 6 horas</i>`;
+      
       await this.telegramService.sendMessage(this.chatId, message);
-      console.log(`✅ Alerta crítica enviada para ${alerts.critical.length} FBO(s)`);
+      DebugLogger.log('JOBS', 'Daily summary sent');
+      
     } catch (error) {
-      console.error('❌ Error en checkCriticalAlerts:', error.message);
+      DebugLogger.error('JOBS', 'Error in sendDailySummary', error);
     }
   }
 
@@ -191,7 +169,7 @@ class FSEMonitorJob {
    */
   stopAllJobs() {
     cron.getScheduledTasks().forEach(task => task.stop());
-    console.log('🛑 FSE Monitor Jobs detenidos');
+    DebugLogger.log('JOBS', 'FSE Monitor Jobs detenidos');
   }
 }
 
