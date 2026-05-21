@@ -107,38 +107,25 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 
       const fbos = await this.fseconomyService.getMyFBOs();
       
-      // 🔍 DEBUG: Logear EXACTAMENTE qué se va a enviar a Telegram
-      console.log('🔍 [TELEGRAM-DEBUG] Formatting FBO list message...');
-      console.log('🔍 [TELEGRAM-DEBUG] FBOs count:', fbos.length);
-      console.log('🔍 [TELEGRAM-DEBUG] First FBO sample:', JSON.stringify(fbos[0], null, 2));
-
       const formattedText = this._formatFBOList(fbos);
 
-      console.log('🔍 [TELEGRAM-DEBUG] Final message preview (first 300 chars):', formattedText.substring(0, 300));
-      console.log('🔍 [TELEGRAM-DEBUG] About to call telegram.sendMessage()...');
-
       try {
-        // ✅ CORRECCIÓN: Asegurar await + catch específico para el sendMessage
+        console.log('🔍 [TELEGRAM-DEBUG] Sending message to Telegram...');
+        
         const result = await this.telegramService.sendMessage(chatId, formattedText);
-        if (!result.ok) {
-          console.warn('⚠️ [TELEGRAM-DEBUG] sendMessage returned not-ok:', result.error);
-          await this.telegramService.sendFallbackMessage?.(chatId, result.error);
+        
+        if (result?.ok) {
+          console.log('✅ [TELEGRAM-DEBUG] Message sent successfully');
         } else {
-          console.log('✅ [TELEGRAM-DEBUG] sendMessage SUCCESS - Message delivered');
-          console.log('✅ [TELEGRAM-DEBUG] Response flow completed for /status');
+          console.warn('⚠️ [TELEGRAM-DEBUG] Telegram API returned:', result?.error || 'unknown');
         }
       } catch (sendError) {
-        console.error('❌ [TELEGRAM-DEBUG] sendMessage FAILED:', {
-          name: sendError.name,
-          message: sendError.message,
-          code: sendError.code,
-          response: sendError.response?.data
-        });
-        // Solo enviar mensaje de error de fallback si el sendMessage falla
+        console.error('❌ [TELEGRAM-DEBUG] sendMessage exception:', sendError.message);
+        // Fallback: mensaje simple sin formato
         await this.telegramService.sendMessage(
-          chatId, 
-          '❌ Error enviando respuesta. Intenta más tarde.'
-        ).catch(console.error); // Evitar error en cascada
+          chatId,
+          `🏢 FBOs ZAM-AIR: ${fbos.length} encontrados. Revisa la app web para detalles.`
+        ).catch(() => {});
       }
     } catch (error) {
       console.error('❌ [TELEGRAM-DEBUG] Error en handleStatus (FSE o formato):', error.message);
@@ -294,18 +281,45 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
       return 'ℹ️ No se encontraron FBOs.';
     }
 
-    let text = '<b>🏢 Mis FBOs</b>\n\n';
+    // 🔍 [TELEGRAM-DEBUG] Formatting FBO list message...
+    console.log('🔍 [TELEGRAM-DEBUG] Formatting FBO list message...');
+    console.log('🔍 [TELEGRAM-DEBUG] FBOs count:', fbos.length);
 
-    fbos.forEach((fbo, index) => {
-      const statusEmoji = this._getFuelStatusEmoji(fbo.daysOfSupplies);
-      text += `${statusEmoji} <b>${fbo.icao}</b> - ${fbo.name}\n`;
-      text += `   Suministros: <b>${fbo.supplies.toLocaleString()}</b> gal\n`;
-      text += `   Consumo diario: <b>${fbo.dailyConsumption.toFixed(1)}</b> gal/día\n`;
-      text += `   Días restantes: <b>${fbo.daysOfSupplies}</b> días\n`;
-      text += `   Ground Fees: $<b>${fbo.groundCrewFees.toFixed(2)}</b>\n\n`;
-    });
+    let message = `🏢 <b>Estado de FBOs ZAM-AIR</b>\n\n`;
 
-    return text.trim();
+    for (const fbo of fbos) {
+      // ✅ CORRECCIÓN: Usar nullish coalescing (??) para valores que pueden ser undefined
+      const supplies = fbo.supplies ?? 0;
+      const suppliesPerDay = fbo.suppliesPerDay ?? 0;
+      const daysOfSupplies = fbo.daysOfSupplies; // Puede ser null si suppliesPerDay es 0
+      const fuelJetA = fbo.fuelJetA ?? 0;
+      const groundCrewFees = fbo.groundCrewFees ?? 0;
+      
+      // ✅ CORRECCIÓN: Validar antes de llamar a toFixed()
+      const suppliesDays = (daysOfSupplies !== null && daysOfSupplies !== undefined) 
+        ? `${daysOfSupplies.toFixed(0)} días` 
+        : (suppliesPerDay > 0 ? 'Calculando...' : 'N/A');
+      
+      // Emoji según días restantes
+      const suppliesEmoji = daysOfSupplies !== null 
+        ? (daysOfSupplies < 30 ? '🔴' : daysOfSupplies < 60 ? '🟡' : '🟢')
+        : '⚪';
+      
+      // ✅ CORRECCIÓN: Usar toLocaleString solo si es número válido
+      const suppliesFormatted = typeof supplies === 'number' ? supplies.toLocaleString() : '0';
+      const fuelFormatted = typeof fuelJetA === 'number' ? fuelJetA.toLocaleString() : '0';
+      const feesFormatted = typeof groundCrewFees === 'number' ? groundCrewFees.toLocaleString() : '0';
+      
+      message += `<b>${fbo.icao ?? 'N/A'}</b> - ${fbo.name ?? 'Sin nombre'}\n`;
+      message += `├─ ${suppliesEmoji} Supplies: ${suppliesFormatted} kg (${suppliesDays})\n`;
+      message += `├─ ⛽ Jet-A: ${fuelFormatted} gal\n`;
+      message += `└─ 💰 Fees: $${feesFormatted}\n\n`;
+    }
+
+    console.log('🔍 [TELEGRAM-DEBUG] Final message preview (first 400 chars):');
+    console.log(message.substring(0, 400));
+
+    return message.trim();
   }
 
   /**
