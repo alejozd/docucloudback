@@ -1,4 +1,4 @@
-const axios = require('axios');
+const axios = require("axios");
 
 /**
  * Servicio de comunicación con Telegram Bot API
@@ -7,12 +7,12 @@ const axios = require('axios');
 class TelegramService {
   constructor(botToken) {
     if (!botToken) {
-      throw new Error('TELEGRAM_BOT_TOKEN es requerido');
+      throw new Error("TELEGRAM_BOT_TOKEN es requerido");
     }
-    
+
     this.botToken = botToken;
     this.baseURL = `https://api.telegram.org/bot${botToken}`;
-    this.timeout = 10000; // 10 segundos timeout
+    this.timeout = 15000; // 10 segundos timeout
   }
 
   /**
@@ -26,8 +26,8 @@ class TelegramService {
     try {
       // Validar requisitos mínimos
       if (!this.botToken) {
-        console.error('❌ [TG-SERVICE] Missing bot token');
-        return { ok: false, error: 'Configuración incompleta' };
+        console.error("❌ [TG-SERVICE] Missing bot token");
+        return { ok: false, error: "Configuración incompleta" };
       }
 
       const response = await axios.post(
@@ -35,37 +35,46 @@ class TelegramService {
         {
           chat_id: chatId,
           text,
-          parse_mode: 'HTML',
+          parse_mode: "HTML",
           disable_web_page_preview: true,
-          ...options
+          ...options,
         },
         {
           timeout: this.timeout,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { "Content-Type": "application/json" },
+        },
       );
 
       if (response.data.ok) {
         console.log(`✅ Mensaje enviado a ${chatId}`);
         return { ok: true, result: response.data.result };
       } else {
-        console.warn('⚠️ [TG-SERVICE] Telegram API returned not-ok:', response.data);
-        return { ok: false, error: response.data.description || 'Unknown error' };
+        console.warn(
+          "⚠️ [TG-SERVICE] Telegram API returned not-ok:",
+          response.data,
+        );
+        return {
+          ok: false,
+          error: response.data.description || "Unknown error",
+        };
       }
     } catch (error) {
       // Logging detallado pero sin exponer tokens
-      console.error('❌ [TG-SERVICE] sendMessage error:', {
+      console.error("❌ [TG-SERVICE] sendMessage error:", {
         name: error.name,
         message: error.message,
         code: error.code,
         status: error.response?.status,
-        data: error.response?.data?.description || error.response?.data
+        data: error.response?.data?.description || error.response?.data,
       });
-      
+
       // Retornar objeto de error, NO lanzar excepción (evita crash del webhook)
-      return { 
-        ok: false, 
-        error: error.response?.data?.description || error.message || 'Telegram API error' 
+      return {
+        ok: false,
+        error:
+          error.response?.data?.description ||
+          error.message ||
+          "Telegram API error",
       };
     }
   }
@@ -81,14 +90,14 @@ class TelegramService {
         `${this.baseURL}/sendMessage`,
         {
           chat_id: chatId,
-          text: '⚠️ Hubo un problema temporal. Intenta en unos minutos.',
-          parse_mode: 'HTML'
+          text: "⚠️ Hubo un problema temporal. Intenta en unos minutos.",
+          parse_mode: "HTML",
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     } catch {
       // Silenciar errores del fallback para evitar loops
-      console.warn('⚠️ [TG-SERVICE] Fallback message also failed');
+      console.warn("⚠️ [TG-SERVICE] Fallback message also failed");
     }
   }
 
@@ -103,8 +112,8 @@ class TelegramService {
     try {
       // Validar requisitos mínimos
       if (!this.botToken) {
-        console.error('❌ [TG-SERVICE] Missing bot token');
-        return { ok: false, error: 'Configuración incompleta' };
+        console.error("❌ [TG-SERVICE] Missing bot token");
+        return { ok: false, error: "Configuración incompleta" };
       }
 
       const response = await axios.post(
@@ -112,37 +121,46 @@ class TelegramService {
         {
           chat_id: chatId,
           text,
-          parse_mode: 'HTML',
+          parse_mode: "HTML",
           reply_markup: {
-            inline_keyboard: inlineKeyboard
-          }
+            inline_keyboard: inlineKeyboard,
+          },
         },
         {
           timeout: this.timeout,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { "Content-Type": "application/json" },
+        },
       );
 
       if (response.data.ok) {
         console.log(`✅ Mensaje con botones enviado a ${chatId}`);
         return { ok: true, result: response.data.result };
       } else {
-        console.warn('⚠️ [TG-SERVICE] Telegram API returned not-ok:', response.data);
-        return { ok: false, error: response.data.description || 'Unknown error' };
+        console.warn(
+          "⚠️ [TG-SERVICE] Telegram API returned not-ok:",
+          response.data,
+        );
+        return {
+          ok: false,
+          error: response.data.description || "Unknown error",
+        };
       }
     } catch (error) {
-      console.error('❌ [TG-SERVICE] sendMessageWithButtons error:', {
+      console.error("❌ [TG-SERVICE] sendMessageWithButtons error:", {
         name: error.name,
         message: error.message,
         code: error.code,
         status: error.response?.status,
-        data: error.response?.data?.description || error.response?.data
+        data: error.response?.data?.description || error.response?.data,
       });
-      
+
       // Retornar objeto de error, NO lanzar excepción (evita crash del webhook)
-      return { 
-        ok: false, 
-        error: error.response?.data?.description || error.message || 'Telegram API error' 
+      return {
+        ok: false,
+        error:
+          error.response?.data?.description ||
+          error.message ||
+          "Telegram API error",
       };
     }
   }
@@ -158,20 +176,23 @@ class TelegramService {
         `${this.baseURL}/setWebhook`,
         {
           url: webhookUrl,
-          allowed_updates: ['message', 'callback_query']
+          allowed_updates: ["message", "callback_query"],
         },
-        { timeout: this.timeout }
+        { timeout: this.timeout },
       );
 
       if (response.data.ok) {
         console.log(`✅ Webhook configurado: ${webhookUrl}`);
         return response.data;
       } else {
-        console.error('❌ Error configurando webhook:', response.data.description);
+        console.error(
+          "❌ Error configurando webhook:",
+          response.data.description,
+        );
         throw new Error(response.data.description);
       }
     } catch (error) {
-      console.error('❌ Telegram API error:', error.message);
+      console.error("❌ Telegram API error:", error.message);
       throw error;
     }
   }
@@ -182,19 +203,21 @@ class TelegramService {
    */
   async getWebhookInfo() {
     try {
-      const response = await axios.get(
-        `${this.baseURL}/getWebhookInfo`,
-        { timeout: this.timeout }
-      );
+      const response = await axios.get(`${this.baseURL}/getWebhookInfo`, {
+        timeout: this.timeout,
+      });
 
       if (response.data.ok) {
         return response.data.result;
       } else {
-        console.error('❌ Error obteniendo webhook info:', response.data.description);
+        console.error(
+          "❌ Error obteniendo webhook info:",
+          response.data.description,
+        );
         throw new Error(response.data.description);
       }
     } catch (error) {
-      console.error('❌ Telegram API error:', error.message);
+      console.error("❌ Telegram API error:", error.message);
       throw error;
     }
   }
@@ -208,18 +231,21 @@ class TelegramService {
       const response = await axios.post(
         `${this.baseURL}/deleteWebhook`,
         {},
-        { timeout: this.timeout }
+        { timeout: this.timeout },
       );
 
       if (response.data.ok) {
-        console.log('✅ Webhook eliminado');
+        console.log("✅ Webhook eliminado");
         return response.data;
       } else {
-        console.error('❌ Error eliminando webhook:', response.data.description);
+        console.error(
+          "❌ Error eliminando webhook:",
+          response.data.description,
+        );
         throw new Error(response.data.description);
       }
     } catch (error) {
-      console.error('❌ Telegram API error:', error.message);
+      console.error("❌ Telegram API error:", error.message);
       throw error;
     }
   }
@@ -232,11 +258,11 @@ class TelegramService {
    * @param {string} priority - Prioridad: 'info', 'warning', 'critical'
    * @returns {Promise<Object>} Respuesta de Telegram API
    */
-  async sendAlert(chatId, title, message, priority = 'info') {
+  async sendAlert(chatId, title, message, priority = "info") {
     const emojis = {
-      info: 'ℹ️',
-      warning: '⚠️',
-      critical: '🚨'
+      info: "ℹ️",
+      warning: "⚠️",
+      critical: "🚨",
     };
 
     const emoji = emojis[priority] || emojis.info;
