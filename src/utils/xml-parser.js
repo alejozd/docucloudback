@@ -172,10 +172,32 @@ function parseFlightLogs(parsed) {
 }
 
 function parseStatistics(parsed) {
-  DebugLogger.log('PARSER', 'parseStatistics() called');
+  DebugLogger.log('PARSER', 'parseStatistics() called', { rootKeys: Object.keys(parsed || {}) });
 
-  const stats = parsed?.Statistics || parsed?.statistics || parsed;
-  return stats || {};
+  // FSE puede devolver: <Statistics>...</Statistics> o <statistics>...</statistics>
+  const stats = parsed?.Statistics || parsed?.statistics || parsed?.StatisticsItem || parsed;
+
+  if (!stats || typeof stats !== 'object') {
+    DebugLogger.warn('PARSER', 'No statistics data found');
+    return {};
+  }
+
+  return {
+    TotalHours: stats.TotalHours || stats.totalhours || stats.Hours || null,
+    TotalEarnings: stats.TotalEarnings || stats.totalearnings || stats.Earnings || null,
+    TotalFlights: stats.TotalFlights || stats.totalflights || stats.Flights || null,
+    TotalDistance: stats.TotalDistance || stats.totaldistance || stats.Distance || null,
+    MemberSince: stats.MemberSince || stats.membersince || stats.Joined || null,
+    LastFlight: stats.LastFlight || stats.lastflight || stats.LastActivity || null,
+    AverageFlightTime: stats.AverageFlightTime || stats.averageflighttime || null,
+    LongestFlight: stats.LongestFlight || stats.longestflight || null,
+    ...Object.keys(stats).reduce((acc, key) => {
+      if (!['TotalHours', 'TotalEarnings', 'TotalFlights', 'TotalDistance', 'MemberSince', 'LastFlight', 'AverageFlightTime', 'LongestFlight'].includes(key)) {
+        acc[key] = stats[key];
+      }
+      return acc;
+    }, {})
+  };
 }
 
 /**

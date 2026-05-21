@@ -135,30 +135,10 @@ router.get('/stats', async (req, res) => {
   try {
     DebugLogger.log('API', 'GET /api/stats requested');
 
-    const response = await axios.get('https://server.fseconomy.net/data', {
-      params: {
-        userkey: process.env.FSE_USERKEY,
-        format: 'xml',
-        query: 'statistics',
-        search: 'key',
-        readaccesskey: process.env.FSE_READ_KEY,
-      },
-      timeout: 15000,
-      headers: { Accept: 'application/xml', 'User-Agent': 'ZAM-AIR-API/1.0' },
-    });
+    const fse = new FSEconomyService(process.env.FSE_USERKEY, process.env.FSE_READ_KEY);
+    const stats = await fse.getStatistics();
 
-    const stats = await xmlParser.parseFSEXml(response.data, 'statistics');
-
-    const formatted = {
-      totalHours: parseFloat(stats.TotalHours || stats.totalhours || stats.TotalHoursFlown || 0),
-      totalEarnings: parseFloat(stats.TotalEarnings || stats.totalearnings || 0),
-      totalFlights: parseInt(stats.TotalFlights || stats.totalflights || 0, 10),
-      totalDistance: parseFloat(stats.TotalDistance || stats.totaldistance || 0),
-      memberSince: stats.MemberSince || stats.membersince || 'Unknown',
-      lastFlight: stats.LastFlight || stats.lastflight || null,
-    };
-
-    res.json({ ok: true, data: formatted });
+    res.json({ ok: true, data: stats });
   } catch (error) {
     DebugLogger.error('API', 'GET /api/stats failed', error);
     res.json({
