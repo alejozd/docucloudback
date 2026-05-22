@@ -41,20 +41,7 @@ router.get('/aircraft', async (req, res) => {
 
     const aircraft = await xmlParser.parseFSEXml(response.data, 'aircraft');
 
-    const formatted = aircraft.map((ac) => ({
-      registration: ac.Registration || ac.registration,
-      makeModel: ac.MakeModel || ac.makemodel,
-      location: ac.Location || ac.location,
-      homeBase: ac.HomeBase || ac.homebase,
-      fuelLevel: parseFloat(ac.FuelLevel || ac.fuellevel) || 0,
-      engineHours: parseFloat(ac.EngineHours || ac.enginehours) || 0,
-      hoursTo100Hr: ac.HoursTo100Hr ? parseFloat(ac.HoursTo100Hr) : null,
-      rentalPrice: ac.RentalPrice ? parseFloat(ac.RentalPrice) : null,
-      monthlyFee: ac.MonthlyFee ? parseFloat(ac.MonthlyFee) : 0,
-      status: ac.Status || 'Active',
-    }));
-
-    res.json({ ok: true, count: formatted.length, data: formatted });
+    res.json({ ok: true, count: aircraft.length, data: aircraft });
   } catch (error) {
     DebugLogger.error('API', 'GET /api/aircraft failed', error);
     res.json({ ok: true, count: 0, data: [], warning: 'Datos de aircraft no disponibles' });
