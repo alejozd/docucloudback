@@ -375,4 +375,94 @@ describe("Licencia Service", () => {
       expect(dias).toBe(0);
     });
   });
+
+  describe("convertirLicencia", () => {
+    const nit = "123456789";
+    const app = "mi-app";
+
+    it("debe crear una nueva licencia si no existe", async () => {
+      mockLicenciaModel.findOne.mockResolvedValue(null);
+      mockLicenciaModel.create.mockResolvedValue({
+        nit,
+        app,
+        estado: "demo",
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+      });
+
+      const resultado = await licenciaService.convertirLicencia(nit, app, "anual", 365, "hash-123");
+
+      expect(mockLicenciaModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        nit,
+        app,
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+        instalacion_hash: "hash-123"
+      }));
+      expect(resultado.ok).toBe(true);
+      expect(resultado.mensaje).toContain("creada");
+    });
+
+    it("debe actualizar una licencia existente", async () => {
+      const mockLicencia = {
+        nit,
+        app,
+        tipo_licencia: "demo",
+        estado: "demo",
+        instalacion_hash: "hash-123",
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.convertirLicencia(nit, app, "anual", 365);
+
+      expect(mockLicencia.tipo_licencia).toBe("anual");
+      expect(mockLicencia.dias_licencia).toBe(365);
+      expect(mockLicencia.save).toHaveBeenCalled();
+      expect(resultado.ok).toBe(true);
+      expect(resultado.mensaje).toContain("actualizada");
+    });
+
+    it("debe asignar instalacion_hash si la existente es nula", async () => {
+      const mockLicencia = {
+        nit,
+        app,
+        tipo_licencia: "demo",
+        instalacion_hash: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      await licenciaService.convertirLicencia(nit, app, "permanente", null, "nuevo-hash");
+
+      expect(mockLicencia.instalacion_hash).toBe("nuevo-hash");
+      expect(mockLicencia.save).toHaveBeenCalled();
+    });
+
+    it("debe fallar si el tipo de licencia es inválido", async () => {
+      await expect(
+        licenciaService.convertirLicencia(nit, app, "invalido", 365)
+      ).rejects.toThrow("tipo_invalido");
+    });
+
+    it("debe fallar si falta dias_licencia para tipo anual", async () => {
+      await expect(
+        licenciaService.convertirLicencia(nit, app, "anual", null)
+      ).rejects.toThrow("dias_requeridos");
+    });
+
+    it("debe retornar error si el hash no coincide", async () => {
+      mockLicenciaModel.findOne.mockResolvedValue({
+        nit,
+        app,
+        instalacion_hash: "hash-original",
+      });
+
+      const resultado = await licenciaService.convertirLicencia(nit, app, "anual", 365, "hash-diferente");
+
+      expect(resultado.error).toBe("instalacion_invalida");
+    });
+  });
 });

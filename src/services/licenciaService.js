@@ -491,10 +491,35 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
     }
 
     // 1. Buscar licencia por NIT y APP
-    const licencia = await Licencia.findOne({ where: { nit, app } });
+    let licencia = await Licencia.findOne({ where: { nit, app } });
 
     if (!licencia) {
-      throw new Error("no_existe");
+      console.log(`[convertirLicencia] Licencia no encontrada para NIT: ${nit}, APP: ${app}. Creando nueva para conversión.`);
+      const diasDemo = process.env.DIAS_DEMO ? parseInt(process.env.DIAS_DEMO) : 15;
+
+      licencia = await Licencia.create({
+        nit,
+        app,
+        estado: ESTADOS.DEMO,
+        tipo_licencia: tipo_licencia,
+        dias_demo: diasDemo,
+        dias_licencia: tipo_licencia === 'anual' ? dias_licencia : null,
+        instalacion_hash: instalacion_hash || null,
+        fecha_activacion: null,
+        fecha_expiracion: null,
+        ultima_validacion: null,
+        ultima_ip: null,
+        version_app: null
+      });
+
+      console.log(`[convertirLicencia] Licencia creada para NIT: ${nit}, APP: ${app}, Tipo: ${tipo_licencia}`);
+
+      return {
+        ok: true,
+        mensaje: "Licencia creada y lista para activacion",
+        tipo_licencia: licencia.tipo_licencia,
+        estado: licencia.estado,
+      };
     }
 
     // 2. Validar instalacion_hash si se proporciona
@@ -508,6 +533,11 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
     // 3. Actualizar campos
     licencia.tipo_licencia = tipo_licencia;
     licencia.estado = ESTADOS.DEMO; // Forzar estado demo - pendiente de activación
+
+    // Si no tenía hash y se proporcionó uno, asignarlo
+    if (!licencia.instalacion_hash && instalacion_hash) {
+      licencia.instalacion_hash = instalacion_hash;
+    }
 
     if (tipo_licencia === 'anual') {
       licencia.dias_licencia = dias_licencia;
