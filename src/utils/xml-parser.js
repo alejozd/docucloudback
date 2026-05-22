@@ -127,27 +127,88 @@ function parseFBOs(parsed) {
  * Parsea respuesta de aeronaves (estructura similar, implementar según necesidad)
  */
 function parseAircraft(parsed) {
-  DebugLogger.log('PARSER', 'parseAircraft() called');
+  DebugLogger.log('PARSER', 'parseAircraft() called', {
+    rootKeys: Object.keys(parsed || {})
+  });
 
-  const aircraftItems = parsed?.AircraftItems || parsed?.aircraftItems || parsed;
-  if (!aircraftItems) return [];
+  // ✅ Estructura real: <AircraftItems><Aircraft>...</Aircraft></AircraftItems>
+  const aircraftItems = parsed?.AircraftItems || parsed?.aircraftItems;
+  if (!aircraftItems) {
+    DebugLogger.warn('PARSER', 'No <AircraftItems> found', { availableKeys: Object.keys(parsed || {}) });
+    return [];
+  }
 
-  let list = aircraftItems.Aircraft || aircraftItems.aircraft || [];
-  if (!Array.isArray(list)) list = list ? [list] : [];
+  let aircraftList = aircraftItems.Aircraft || aircraftItems.aircraft;
+  if (!aircraftList) {
+    DebugLogger.warn('PARSER', 'No <Aircraft> found inside <AircraftItems>');
+    return [];
+  }
 
-  return list.map((ac) => ({
-    Registration: ac.Registration || ac.registration,
-    MakeModel: ac.MakeModel || ac.makemodel,
-    Location: ac.Location || ac.location,
-    HomeBase: ac.HomeBase || ac.homebase,
-    FuelLevel: ac.FuelLevel || ac.fuellevel,
-    EngineHours: ac.EngineHours || ac.enginehours,
-    HoursTo100Hr: ac.HoursTo100Hr || ac.hoursTo100Hr,
-    RentalPrice: ac.RentalPrice || ac.rentalprice,
-    MonthlyFee: ac.MonthlyFee || ac.monthlyfee,
-    Status: ac.Status || ac.status,
-    Assignments: ac.Assignments || ac.assignments,
-  }));
+  // Normalizar a array
+  if (!Array.isArray(aircraftList)) {
+    aircraftList = [aircraftList];
+  }
+
+  // ✅ Helper para parsear tiempo HH:MM
+  const parseTimeHHMM = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    return hours + (minutes / 60);
+  };
+
+  DebugLogger.log('PARSER', `Processing ${aircraftList.length} aircraft`);
+
+  return aircraftList.map(ac => {
+    // ✅ Extraer TODOS los campos reales de FSEconomy
+    const fuelPct = parseFloat(ac.FuelPct) || 0;
+    const engineTimeRaw = ac.EngineTime || ac.engineTime || '';
+    const timeLast100Raw = ac.TimeLast100hr || ac.timeLast100hr || '';
+
+    return {
+      // Campos básicos
+      registration: ac.Registration || ac.registration || 'N/A',
+      makeModel: ac.MakeModel || ac.makemodel || 'N/A',
+      owner: ac.Owner || ac.owner,
+      location: ac.Location || ac.location,
+      locationName: ac.LocationName || ac.locationname,
+      homeBase: ac.Home || ac.home,
+
+      // ✅ Combustible: FuelPct es decimal (0.88 = 88%)
+      fuelLevel: Math.round(fuelPct * 100), // Convertir a porcentaje entero: 88
+      fuelPctRaw: fuelPct, // Mantener valor original decimal
+
+      // ✅ Tiempos de motor/avión
+      engineTimeRaw: engineTimeRaw, // Formato HH:MM
+      engineHours: parseTimeHHMM(engineTimeRaw), // Horas decimales
+
+      airframeTimeRaw: ac.AirframeTime || ac.airframeTime,
+      airframeHours: parseTimeHHMM(ac.AirframeTime || ac.airframeTime),
+
+      // ✅ Mantenimiento: horas desde último 100hr
+      timeLast100hrRaw: timeLast100Raw, // Formato HH:MM
+      hoursTo100Hr: parseTimeHHMM(timeLast100Raw), // Horas decimales
+
+      // Precios y alquiler
+      salePrice: parseFloat(ac.SalePrice) || 0,
+      sellbackPrice: parseFloat(ac.SellbackPrice) || 0,
+      rentalDry: parseFloat(ac.RentalDry) || 0,
+      rentalWet: parseFloat(ac.RentalWet) || 0,
+      rentalType: ac.RentalType || ac.rentaltype,
+      bonus: parseFloat(ac.Bonus) || 0,
+      monthlyFee: parseFloat(ac.MonthlyFee) || 0,
+      feeOwed: parseFloat(ac.FeeOwed) || 0,
+
+      // Estado
+      equipment: ac.Equipment || ac.equipment,
+      needsRepair: parseInt(ac.NeedsRepair) === 1,
+      rentedBy: ac.RentedBy || ac.rentedby,
+      leasedFrom: ac.LeasedFrom || ac.leasedfrom,
+
+      // Serial
+      serialNumber: ac.SerialNumber || ac.serialnumber
+    };
+  });
 }
 
 function parseFlightLogs(parsed) {
