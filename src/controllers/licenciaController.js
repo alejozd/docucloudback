@@ -311,6 +311,10 @@ const convertir = async (req, res) => {
 
     const resultado = await convertirLicencia(nit, app, tipo_licencia, dias_licencia, instalacion_hash);
 
+    if (resultado.error) {
+      return res.status(400).json(resultado);
+    }
+
     return res.status(200).json(resultado);
   } catch (error) {
     console.error("Error en convertir licencia:", error.message);

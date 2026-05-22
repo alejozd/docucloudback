@@ -22,13 +22,15 @@ const generarHash = (data) => {
 };
 
 // Validar firma HMAC SHA256
-const SECRET = process.env.LICENSE_SECRET;
+function getSecret() {
+  return process.env.LICENSE_SECRET || "default-secret";
+}
 
 function validarFirma(payloadBase64, firma) {
   const payload = Buffer.from(payloadBase64, "base64").toString("utf8");
 
   const firmaCalculada = crypto
-    .createHmac("sha256", SECRET)
+    .createHmac("sha256", getSecret())
     .update(payload)
     .digest("hex");
 
@@ -284,7 +286,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     }
 
     // Buscar licencia existente
-    const licencia = await Licencia.findOne({ where: { nit, app } });
+    const licencia = await Licencia.findOne({ where: { nit, app: data.app } });
 
     if (!licencia) {
       return { error: "no_existe", mensaje: "No existe licencia para este NIT" };
@@ -325,7 +327,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 // Generar código de licencia firmado con HMAC SHA256
 const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   try {
-    const SECRET = process.env.LICENSE_SECRET;
+    const SECRET = getSecret();
 
     // Validar que instalacion_hash no venga vacío
     if (!instalacion_hash || instalacion_hash.trim() === "") {
@@ -488,52 +490,41 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
       throw new Error("dias_requeridos");
     }
 
-    // Construir filtro: siempre usa nit, opcionalmente instalacion_hash si aplica
-    const whereClause = { nit, app };
-    if (instalacion_hash) {
-      whereClause.instalacion_hash = instalacion_hash;
-    }
+    // 1. Buscar licencia por NIT y APP
+    const licencia = await Licencia.findOne({ where: { nit, app } });
 
-    // Preparar campos a actualizar - solo tipo_licencia y dias_licencia
-    // El estado se fuerza a 'demo' para indicar que pendiente de activación
-    const updateData = {
-      tipo_licencia,
-      estado: ESTADOS.DEMO, // Forzar estado demo - pendiente de activación
-    };
-
-    // Asignar dias_licencia según el tipo
-    if (tipo_licencia === 'anual') {
-      updateData.dias_licencia = dias_licencia;
-    } else {
-      // Permanente o demo → dias_licencia = null
-      updateData.dias_licencia = null;
-    }
-
-    // NO modificar fecha_activacion ni fecha_expiracion - se recalcularán en activación
-
-    // Ejecutar UPDATE directo y obtener filas afectadas
-    const [filasAfectadas] = await Licencia.update(updateData, {
-      where: whereClause,
-      returning: true, // Para PostgreSQL, retorna registros actualizados
-    });
-
-    // Loggear el resultado del UPDATE
-    console.log(`[convertirLicencia] Licencia convertida a ${tipo_licencia}, pendiente de activacion`);
-    console.log(`[convertirLicencia] UPDATE ejecutado - NIT: ${nit}, APP: ${app}, Filas afectadas: ${filasAfectadas}, Datos:`, updateData);
-
-    // Verificar que se haya afectado al menos 1 fila
-    if (filasAfectadas === 0) {
+    if (!licencia) {
       throw new Error("no_existe");
     }
 
-    // Obtener datos actualizados para retornar en la respuesta
-    const licenciaActualizada = await Licencia.findOne({ where: { nit, app } });
+    // 2. Validar instalacion_hash si se proporciona
+    if (instalacion_hash && licencia.instalacion_hash && licencia.instalacion_hash !== instalacion_hash) {
+      return {
+        error: "instalacion_invalida",
+        mensaje: "El hash de instalación no coincide con el registrado",
+      };
+    }
+
+    // 3. Actualizar campos
+    licencia.tipo_licencia = tipo_licencia;
+    licencia.estado = ESTADOS.DEMO; // Forzar estado demo - pendiente de activación
+
+    if (tipo_licencia === 'anual') {
+      licencia.dias_licencia = dias_licencia;
+    } else {
+      licencia.dias_licencia = null;
+    }
+
+    // Guardar cambios
+    await licencia.save();
+
+    console.log(`[convertirLicencia] Licencia convertida a ${tipo_licencia}, pendiente de activacion - NIT: ${nit}, APP: ${app}`);
 
     return {
       ok: true,
       mensaje: "Licencia actualizada, pendiente de activacion",
-      tipo_licencia: licenciaActualizada.tipo_licencia,
-      estado: licenciaActualizada.estado,
+      tipo_licencia: licencia.tipo_licencia,
+      estado: licencia.estado,
     };
   } catch (error) {
     console.error("Error en convertirLicencia:", error.message);

@@ -267,6 +267,51 @@ describe("Licencia Service", () => {
     });
   });
 
+  describe("registrarLicencia", () => {
+    const nit = "123456789";
+    const app = "mi-app";
+    const instalacion_hash = "hash-123";
+    const SECRET = "test-secret";
+    process.env.LICENSE_SECRET = SECRET;
+
+    it("debe registrar correctamente una licencia válida", async () => {
+      const payload = { nit, app, instalacion_hash, exp: new Date(Date.now() + 86400000).toISOString() };
+      const payloadString = JSON.stringify(payload);
+      const payloadBase64 = Buffer.from(payloadString).toString("base64");
+      const firma = crypto.createHmac("sha256", SECRET).update(payloadString).digest("hex");
+      const codigo = `${payloadBase64}.${firma}`;
+
+      const mockLicencia = {
+        nit,
+        app,
+        instalacion_hash: null,
+        estado: "demo",
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.registrarLicencia(nit, instalacion_hash, codigo);
+
+      expect(resultado.estado).toBe("activa");
+      expect(mockLicencia.instalacion_hash).toBe(instalacion_hash);
+      expect(mockLicencia.save).toHaveBeenCalled();
+    });
+
+    it("debe retornar error si el NIT no coincide", async () => {
+      const payload = { nit: "otro-nit", app, instalacion_hash };
+      const payloadString = JSON.stringify(payload);
+      const payloadBase64 = Buffer.from(payloadString).toString("base64");
+      const firma = crypto.createHmac("sha256", SECRET).update(payloadString).digest("hex");
+      const codigo = `${payloadBase64}.${firma}`;
+
+      const resultado = await licenciaService.registrarLicencia(nit, instalacion_hash, codigo);
+
+      expect(resultado.error).toBe("licencia_invalida");
+      expect(resultado.mensaje).toContain("NIT no coincide");
+    });
+  });
+
   describe("crearLicencia", () => {
     it("debe crear una nueva licencia sin instalacion_hash", async () => {
       const nit = "123456789";
