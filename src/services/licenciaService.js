@@ -48,10 +48,17 @@ const validarApp = (app) => {
   }
 };
 
+const normalizarInput = (val) => {
+  return typeof val === 'string' ? val.trim() : val;
+};
+
 // Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // Buscar licencia por NIT
     let licencia = await Licencia.findOne({ where: { nit, app } });
 
@@ -115,7 +122,10 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 // Validar licencia (uso normal) - con auto-creación de licencias demo
 const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // Buscar licencia
     let licencia = await Licencia.findOne({ where: { nit, app } });
 
@@ -199,6 +209,7 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 // Generar licencia offline firmada
 const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
   try {
+    nit = normalizarInput(nit);
     const SECRET_KEY = process.env.LICENCIA_SECRET_KEY || "default-secret-key";
 
     // Construir objeto
@@ -229,7 +240,10 @@ const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
 // Crear licencia (solo admin) - SIN instalacion_hash aún
 const crearLicencia = async (nit, app, dias_demo = 15) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // Validar si ya existe → error "ya_existe"
     const licenciaExistente = await Licencia.findOne({ where: { nit, app } });
 
@@ -265,6 +279,7 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
 // Registrar licencia con código firmado HMAC SHA256
 const registrarLicencia = async (nit, instalacion_hash, codigo) => {
   try {
+    nit = normalizarInput(nit);
     // Separar payload y firma
     const partes = codigo.split(".");
     if (partes.length !== 2) {
@@ -286,7 +301,8 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     }
 
     // Buscar licencia existente
-    const licencia = await Licencia.findOne({ where: { nit, app: data.app } });
+    const appNormalizado = normalizarInput(data.app);
+    const licencia = await Licencia.findOne({ where: { nit, app: appNormalizado } });
 
     if (!licencia) {
       return { error: "no_existe", mensaje: "No existe licencia para este NIT" };
@@ -327,6 +343,8 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
 // Generar código de licencia firmado con HMAC SHA256
 const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     const SECRET = getSecret();
 
     // Validar que instalacion_hash no venga vacío
@@ -373,7 +391,10 @@ const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
 // Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, ultima_ip, version_app) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // 1. Buscar licencia por NIT
     let licencia = await Licencia.findOne({ where: { nit, app } });
 
@@ -479,7 +500,10 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 // Convertir licencia demo a real (anual o permanente)
 const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // Validar tipo de licencia - debe ser uno de: 'demo', 'anual', 'permanente'
     if (!['demo', 'anual', 'permanente'].includes(tipo_licencia)) {
       throw new Error("tipo_invalido");
@@ -494,7 +518,7 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
     let licencia = await Licencia.findOne({ where: { nit, app } });
 
     if (!licencia) {
-      console.log(`[convertirLicencia] Licencia no encontrada para NIT: ${nit}, APP: ${app}. Creando nueva para conversión.`);
+      console.log(`[convertirLicencia] Licencia no encontrada para NIT: '${nit}' (len: ${nit ? nit.length : 0}), APP: '${app}' (len: ${app ? app.length : 0}). Creando nueva para conversión.`);
       const diasDemo = process.env.DIAS_DEMO ? parseInt(process.env.DIAS_DEMO) : 15;
 
       licencia = await Licencia.create({
@@ -565,7 +589,10 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
 // Obtener estado de la licencia
 const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app) => {
   try {
+    nit = normalizarInput(nit);
+    app = normalizarInput(app);
     validarApp(app);
+
     // Buscar licencia
     const licencia = await Licencia.findOne({ where: { nit, app } });
 

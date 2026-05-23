@@ -12,10 +12,14 @@ const {
 // Controlador para activar licencia
 const activar = async (req, res) => {
   try {
-    const { nit, instalacion_hash, app } = req.body;
+    let { nit, instalacion_hash, app } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
+    if (!nit || !instalacion_hash || !app) {
       return res.status(400).json({
         error: "campos_requeridos",
         mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
@@ -50,10 +54,14 @@ const activar = async (req, res) => {
 // Controlador para validar licencia
 const validar = async (req, res) => {
   try {
-    const { nit, instalacion_hash, app } = req.body;
+    let { nit, instalacion_hash, app } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
+    if (!nit || !instalacion_hash || !app) {
       return res.status(400).json({
         error: "campos_requeridos",
         mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
@@ -106,7 +114,10 @@ const verificarApiKey = (req, res, next) => {
 // Controlador para generar licencia offline
 const generarOffline = async (req, res) => {
   try {
-    const { nit, instalacion_hash, dias } = req.body;
+    let { nit, instalacion_hash, dias } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
 
     // Validaciones básicas
     if (!nit || !instalacion_hash || !dias) {
@@ -138,7 +149,11 @@ const generarOffline = async (req, res) => {
 // Controlador para crear licencia (solo admin)
 const crear = async (req, res) => {
   try {
-    const { nit, app, dias_demo } = req.body;
+    let { nit, app, dias_demo } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     // Validaciones básicas
     if (!nit || !app) {
@@ -180,7 +195,10 @@ const crear = async (req, res) => {
 // Controlador para registrar licencia con código firmado
 const registrar = async (req, res) => {
   try {
-    const { nit, instalacion_hash, codigo } = req.body;
+    let { nit, instalacion_hash, codigo } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
 
     if (!nit || !instalacion_hash || !codigo) {
       return res.status(400).json({
@@ -208,7 +226,11 @@ const registrar = async (req, res) => {
 // Controlador para generar código de licencia firmado (admin)
 const generarCodigo = async (req, res) => {
   try {
-    const { nit, app, instalacion_hash, dias } = req.body;
+    let { nit, app, instalacion_hash, dias } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     if (!nit || !app || !instalacion_hash || !dias) {
       return res.status(400).json({
@@ -238,10 +260,14 @@ const generarCodigo = async (req, res) => {
 // Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 const activarEnLinea = async (req, res) => {
   try {
-    const { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, version_app } = req.body;
+    let { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, version_app } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     // Validaciones básicas
-    if (!nit || !instalacion_hash || !app || !String(app).trim()) {
+    if (!nit || !instalacion_hash || !app) {
       return res.status(400).json({
         error: "campos_requeridos",
         mensaje: "Los campos 'nit', 'app' e 'instalacion_hash' son requeridos",
@@ -276,10 +302,14 @@ const activarEnLinea = async (req, res) => {
 // Controlador para convertir licencia demo a real (anual o permanente)
 const convertir = async (req, res) => {
   try {
-    const { nit, app, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
+    let { nit, app, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
+
+    // Normalizar inputs
+    if (nit) nit = String(nit).trim();
+    if (app) app = String(app).trim();
 
     // Validaciones básicas
-    if (!nit || !app || !String(app).trim()) {
+    if (!nit || !app) {
       return res.status(400).json({
         error: "campo_requerido",
         mensaje: "Los campos 'nit' y 'app' son requeridos",
