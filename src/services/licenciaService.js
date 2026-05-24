@@ -272,7 +272,7 @@ const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
 };
 
 // Crear licencia (solo admin) - SIN instalacion_hash aún
-const crearLicencia = async (nit, app, dias_demo = 15) => {
+const crearLicencia = async (nit, app, dias_demo = 15, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     app = normalizarInput(app);
@@ -297,7 +297,7 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
       fecha_activacion: null,
       fecha_expiracion: null,
       ultima_validacion: null,
-      ultima_ip: null,
+      ultima_ip: ultima_ip || null,
       version_app: null
     });
 
@@ -311,7 +311,7 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
 };
 
 // Registrar licencia con código firmado HMAC SHA256
-const registrarLicencia = async (nit, instalacion_hash, codigo) => {
+const registrarLicencia = async (nit, instalacion_hash, codigo, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     // Separar payload y firma
@@ -358,6 +358,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     if (data.exp) {
       licencia.fecha_expiracion = new Date(data.exp);
     }
+    licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
     licencia.updated_at = new Date();
 
     await licencia.save();
@@ -555,7 +556,7 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 };
 
 // Convertir licencia demo a real (anual o permanente)
-const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash) => {
+const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     app = normalizarInput(app);
@@ -589,7 +590,7 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
         fecha_activacion: null,
         fecha_expiracion: null,
         ultima_validacion: null,
-        ultima_ip: null,
+        ultima_ip: ultima_ip || null,
         version_app: null
       });
 
@@ -625,6 +626,8 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
     } else {
       licencia.dias_licencia = null;
     }
+
+    licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
 
     // Guardar cambios
     await licencia.save();
