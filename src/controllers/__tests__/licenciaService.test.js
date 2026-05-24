@@ -59,7 +59,7 @@ describe("Licencia Service", () => {
         app
       );
 
-      expect(resultado.estado).toBe("demo");
+      expect(resultado.estado).toBe("activa");
       expect(resultado.dias_restantes).toBeGreaterThanOrEqual(14);
       expect(licenciaSinActivar.instalacion_hash).toBe(instalacion_hash);
       expect(licenciaSinActivar.save).toHaveBeenCalled();

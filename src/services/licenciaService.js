@@ -87,11 +87,44 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       throw new Error("no_autorizado");
     }
 
-    // 🔹 Manejo de instalación
-    if (!licencia.instalacion_hash) {
-      // Primera activación: asignar hash y fechas
-      licencia.instalacion_hash = instalacion_hash;
-      licencia.fecha_activacion = new Date();
+    const ahora = new Date();
+
+    // 🔹 Manejo de instalación y recálculo de expiración
+    // Recalculamos si:
+    // 1. No tiene hash (primera activación)
+    // 2. Está en estado demo pero tiene tipo anual/permanente (acaba de ser convertida)
+    // 3. Ya expiró (está bloqueada o la fecha es pasada)
+    const acabadaDeConvertir = licencia.estado === ESTADOS.DEMO && (licencia.tipo_licencia === 'anual' || licencia.tipo_licencia === 'permanente');
+    const expirada = licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora;
+
+    // Si ya expiró, forzar estado bloqueado antes de cualquier otra lógica si no se va a recalcular
+    if (expirada && !acabadaDeConvertir && licencia.instalacion_hash === instalacion_hash) {
+      licencia.estado = ESTADOS.BLOQUEADO;
+      await licencia.save();
+      return {
+        estado: ESTADOS.BLOQUEADO,
+        tipo_licencia: licencia.tipo_licencia,
+        expira: licencia.fecha_expiracion,
+        dias_restantes: 0,
+        instalacion_hash: licencia.instalacion_hash,
+        app: licencia.app,
+        version_app: version_app || licencia.version_app || null,
+        mensaje: "licencia_expirada",
+      };
+    }
+
+    if (!licencia.instalacion_hash || acabadaDeConvertir) {
+      // Asignar hash si no tenía
+      if (!licencia.instalacion_hash) {
+        licencia.instalacion_hash = instalacion_hash;
+      } else if (licencia.instalacion_hash !== instalacion_hash) {
+        return {
+          error: "instalacion_invalida",
+          mensaje: "El hash de instalación no coincide con el registrado",
+        };
+      }
+
+      licencia.fecha_activacion = ahora;
 
       // Determinar días según tipo de licencia
       let diasParaAgregar = licencia.dias_demo || 15;
@@ -103,13 +136,16 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 
       if (diasParaAgregar !== null) {
         licencia.fecha_expiracion = new Date(
-          Date.now() + diasParaAgregar * 24 * 60 * 60 * 1000
+          ahora.getTime() + diasParaAgregar * 24 * 60 * 60 * 1000
         );
       } else {
         licencia.fecha_expiracion = null;
       }
 
-      licencia.ultima_validacion = new Date();
+      // Si es la primera activación de una demo, mantener estado demo
+      // Si es una conversión a anual/permanente, pasar a activa
+      licencia.estado = (licencia.tipo_licencia === 'demo') ? ESTADOS.DEMO : ESTADOS.ACTIVA;
+      licencia.ultima_validacion = ahora;
       licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
       if (version_app) licencia.version_app = version_app;
       await licencia.save();
@@ -121,8 +157,7 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       };
     }
 
-    // 🔹 Validar expiración
-    const ahora = new Date();
+    // 🔹 Validar expiración (Post-activación/re-activación)
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
       licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
@@ -136,6 +171,12 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
         version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
       };
+    }
+
+    // Asegurar que si llegamos aquí está activa
+    if (licencia.estado !== ESTADOS.ACTIVA) {
+      licencia.estado = ESTADOS.ACTIVA;
+      await licencia.save();
     }
 
     return {
