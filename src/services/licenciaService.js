@@ -72,9 +72,23 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       // Primera activación: asignar hash y fechas
       licencia.instalacion_hash = instalacion_hash;
       licencia.fecha_activacion = new Date();
-      licencia.fecha_expiracion = new Date(
-        Date.now() + licencia.dias_demo * 24 * 60 * 60 * 1000
-      );
+
+      // Determinar días según tipo de licencia
+      let diasParaAgregar = licencia.dias_demo || 15;
+      if (licencia.tipo_licencia === 'anual') {
+        diasParaAgregar = licencia.dias_licencia || 365;
+      } else if (licencia.tipo_licencia === 'permanente') {
+        diasParaAgregar = null;
+      }
+
+      if (diasParaAgregar !== null) {
+        licencia.fecha_expiracion = new Date(
+          Date.now() + diasParaAgregar * 24 * 60 * 60 * 1000
+        );
+      } else {
+        licencia.fecha_expiracion = null;
+      }
+
       licencia.ultima_validacion = new Date();
       licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
       if (version_app) licencia.version_app = version_app;
@@ -305,7 +319,8 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     const licencia = await Licencia.findOne({ where: { nit, app: appNormalizado } });
 
     if (!licencia) {
-      return { error: "no_existe", mensaje: "No existe licencia para este NIT" };
+      console.warn(`[registrarLicencia] Intento de registro fallido: No existe licencia para NIT: ${nit}, APP: ${appNormalizado}`);
+      return { error: "no_existe", mensaje: `No existe licencia para NIT: ${nit} y APP: ${appNormalizado}` };
     }
 
     // Validar hash
@@ -436,34 +451,56 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
     }
 
     // 3. Leer configuración de la licencia
-    const tipoLicenciaConfig = tipo_licencia || licencia.tipo_licencia || 'demo';
-    const diasDemoConfig = dias_demo !== undefined ? dias_demo : licencia.dias_demo;
-    const diasLicenciaConfig = dias_licencia !== undefined ? dias_licencia : licencia.dias_licencia;
+    // Priorizamos lo que hay en DB si es más "fuerte" (anual/permanente) que lo que viene en el payload (demo)
+    let tipoLicenciaConfig = tipo_licencia || licencia.tipo_licencia || 'demo';
 
-    console.log(`[activarOnline] Tipo de licencia detectado: ${tipoLicenciaConfig}`);
+    if ((licencia.tipo_licencia === 'anual' || licencia.tipo_licencia === 'permanente') && tipo_licencia === 'demo') {
+      console.log(`[activarOnline] Intento de downgrade detectado para NIT: ${nit}, APP: ${app}. Manteniendo tipo: ${licencia.tipo_licencia}`);
+      tipoLicenciaConfig = licencia.tipo_licencia;
+    }
+
+    const diasDemoConfig = dias_demo !== undefined ? dias_demo : licencia.dias_demo;
+    // Si la licencia ya existe en DB y es anual, priorizamos sus días sobre lo que diga el payload para evitar errores
+    let diasLicenciaConfig = (licencia.tipo_licencia === 'anual' && licencia.dias_licencia)
+      ? licencia.dias_licencia
+      : (dias_licencia !== undefined ? dias_licencia : (licencia.dias_licencia || 365));
+
+    console.log(`[activarOnline] Tipo de licencia final: ${tipoLicenciaConfig}`);
 
     // 4. Aplicar lógica según tipo_licencia
     const ahora = new Date();
-    let fechaExpiracion = null;
+    let fechaExpiracion = licencia.fecha_expiracion;
     let diasAplicados = 0;
 
-    if (tipoLicenciaConfig === 'demo') {
-      diasAplicados = diasDemoConfig || 15;
-      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
-      console.log(`[activarOnline] Licencia DEMO - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
-    } else if (tipoLicenciaConfig === 'anual') {
-      diasAplicados = diasLicenciaConfig || 365;
-      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
-      console.log(`[activarOnline] Licencia ANUAL - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
-    } else if (tipoLicenciaConfig === 'permanente') {
-      fechaExpiracion = null;
-      console.log(`[activarOnline] Licencia PERMANENTE - Sin expiración`);
+    // Solo recalculamos la fecha de expiración si:
+    // - La licencia no está activa (ej: es nueva o acaba de ser convertida y su estado es 'demo')
+    // - O si el tipo de licencia cambió
+    // - O si ya expiró (está bloqueada)
+    const debeRecalcular = licencia.estado !== ESTADOS.ACTIVA ||
+                           licencia.tipo_licencia !== tipoLicenciaConfig ||
+                           (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora);
+
+    if (debeRecalcular) {
+      if (tipoLicenciaConfig === 'demo') {
+        diasAplicados = diasDemoConfig || 15;
+        fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+        console.log(`[activarOnline] Recalculando DEMO - NIT: ${nit}, APP: ${app}, Días: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+      } else if (tipoLicenciaConfig === 'anual') {
+        diasAplicados = diasLicenciaConfig || 365;
+        fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+        console.log(`[activarOnline] Recalculando ANUAL - NIT: ${nit}, APP: ${app}, Días: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+      } else if (tipoLicenciaConfig === 'permanente') {
+        fechaExpiracion = null;
+        console.log(`[activarOnline] Recalculando PERMANENTE - Sin expiración`);
+      }
+      licencia.fecha_activacion = ahora;
+      licencia.fecha_expiracion = fechaExpiracion;
+    } else {
+      console.log(`[activarOnline] Manteniendo fecha de expiración existente: ${fechaExpiracion ? fechaExpiracion.toISOString() : 'NULL'}`);
     }
 
     // 5. Actualizar campos de la licencia
     licencia.tipo_licencia = tipoLicenciaConfig;
-    licencia.fecha_activacion = ahora;
-    licencia.fecha_expiracion = fechaExpiracion;
     licencia.estado = ESTADOS.ACTIVA;
     licencia.ultima_validacion = ahora;
     licencia.ultima_ip = ultima_ip || licencia.ultima_ip;

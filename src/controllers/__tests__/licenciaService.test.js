@@ -65,6 +65,34 @@ describe("Licencia Service", () => {
       expect(licenciaSinActivar.save).toHaveBeenCalled();
     });
 
+    it("debe usar dias_licencia si es anual durante la primera activación", async () => {
+      const nit = "123456789";
+      const instalacion_hash = "hash-instalacion-1";
+      const app = "mi-app";
+
+      const licenciaAnualSinActivar = {
+        id: 1,
+        nit,
+        instalacion_hash: null,
+        estado: "demo",
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(licenciaAnualSinActivar);
+
+      const resultado = await licenciaService.activarLicencia(
+        nit,
+        instalacion_hash,
+        app
+      );
+
+      expect(resultado.tipo_licencia).toBe("anual");
+      expect(resultado.dias_restantes).toBeGreaterThan(360);
+      expect(licenciaAnualSinActivar.save).toHaveBeenCalled();
+    });
+
     it("debe rechazar si el hash de instalación no coincide", async () => {
       const nit = "123456789";
       const instalacion_hash_original = "hash-original";
@@ -463,6 +491,102 @@ describe("Licencia Service", () => {
       const resultado = await licenciaService.convertirLicencia(nit, app, "anual", 365, "hash-diferente");
 
       expect(resultado.error).toBe("instalacion_invalida");
+    });
+  });
+
+  describe("activarOnline - Flujo completo", () => {
+    const nit = "123456789";
+    const app = "mi-app";
+    const instalacion_hash = "hash-123";
+
+    it("debe activar una licencia que acaba de ser convertida a anual", async () => {
+      // 1. Simular licencia convertida (estado demo, tipo anual)
+      const mockLicencia = {
+        nit,
+        app,
+        instalacion_hash,
+        estado: "demo",
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+        fecha_expiracion: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      // 2. Llamar a activarOnline (el frontend podría enviar tipo_licencia: 'demo' por error)
+      const resultado = await licenciaService.activarOnline(
+        nit,
+        app,
+        instalacion_hash,
+        "demo", // Intento de downgrade accidental
+        15,
+        null
+      );
+
+      // 3. Verificar que se mantuvo como ANUAL y se calcularon 365 días
+      expect(resultado.tipo_licencia).toBe("anual");
+      expect(resultado.estado).toBe("activa");
+      expect(resultado.dias_restantes).toBeGreaterThan(360);
+      expect(mockLicencia.tipo_licencia).toBe("anual");
+      expect(mockLicencia.save).toHaveBeenCalled();
+    });
+
+    it("no debe recalcular la fecha de expiración si ya está activa y es del mismo tipo", async () => {
+      const fechaExpOriginal = new Date();
+      fechaExpOriginal.setDate(fechaExpOriginal.getDate() + 100);
+
+      const mockLicencia = {
+        nit,
+        app,
+        instalacion_hash,
+        estado: "activa",
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+        fecha_expiracion: fechaExpOriginal,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.activarOnline(
+        nit,
+        app,
+        instalacion_hash,
+        "anual"
+      );
+
+      // La fecha de expiración debería ser la misma
+      expect(new Date(resultado.expira).getTime()).toBe(fechaExpOriginal.getTime());
+    });
+
+    it("debe recalcular la fecha si la licencia ya expiró", async () => {
+      const fechaExpPasada = new Date();
+      fechaExpPasada.setDate(fechaExpPasada.getDate() - 5);
+
+      const mockLicencia = {
+        nit,
+        app,
+        instalacion_hash,
+        estado: "activa", // o bloqueado
+        tipo_licencia: "anual",
+        dias_licencia: 365,
+        fecha_expiracion: fechaExpPasada,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.activarOnline(
+        nit,
+        app,
+        instalacion_hash,
+        "anual"
+      );
+
+      // La fecha de expiración debería ser nueva (aprox 365 días desde ahora)
+      expect(new Date(resultado.expira).getTime()).toBeGreaterThan(Date.now());
+      expect(resultado.dias_restantes).toBeGreaterThan(360);
     });
   });
 });
