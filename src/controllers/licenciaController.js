@@ -171,7 +171,7 @@ const crear = async (req, res) => {
       });
     }
 
-    const resultado = await crearLicencia(nit, app, dias);
+    const resultado = await crearLicencia(nit, app, dias, req.ip);
 
     return res.status(201).json(resultado);
   } catch (error) {
@@ -207,7 +207,7 @@ const registrar = async (req, res) => {
       });
     }
 
-    const resultado = await registrarLicencia(nit, instalacion_hash, codigo);
+    const resultado = await registrarLicencia(nit, instalacion_hash, codigo, req.ip);
 
     if (resultado.error) {
       return res.status(400).json(resultado);
@@ -339,7 +339,7 @@ const convertir = async (req, res) => {
       });
     }
 
-    const resultado = await convertirLicencia(nit, app, tipo_licencia, dias_licencia, instalacion_hash);
+    const resultado = await convertirLicencia(nit, app, tipo_licencia, dias_licencia, instalacion_hash, req.ip);
 
     if (resultado.error) {
       return res.status(400).json(resultado);

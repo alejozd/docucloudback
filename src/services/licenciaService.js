@@ -52,6 +52,26 @@ const normalizarInput = (val) => {
   return typeof val === 'string' ? val.trim() : val;
 };
 
+// Helper para buscar licencia por nit+app, con soporte para migración de registros legados ('desconocido')
+const buscarOAdoptarLicencia = async (nit, app) => {
+  // 1. Intentar búsqueda exacta
+  let licencia = await Licencia.findOne({ where: { nit, app } });
+
+  if (licencia) return licencia;
+
+  // 2. Si no existe, buscar registro legado con app 'desconocido'
+  let licenciaLegada = await Licencia.findOne({ where: { nit, app: 'desconocido' } });
+
+  if (licenciaLegada) {
+    console.log(`[Migration] Migrando licencia legada para NIT: ${nit} de 'desconocido' a '${app}'`);
+    licenciaLegada.app = app;
+    await licenciaLegada.save();
+    return licenciaLegada;
+  }
+
+  return null;
+};
+
 // Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
@@ -59,23 +79,73 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia por NIT
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia por NIT y APP (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // ❌ NUEVO COMPORTAMIENTO: Si no existe → error "no_autorizado"
     if (!licencia) {
       throw new Error("no_autorizado");
     }
 
-    // 🔹 Manejo de instalación
-    if (!licencia.instalacion_hash) {
-      // Primera activación: asignar hash y fechas
-      licencia.instalacion_hash = instalacion_hash;
-      licencia.fecha_activacion = new Date();
-      licencia.fecha_expiracion = new Date(
-        Date.now() + licencia.dias_demo * 24 * 60 * 60 * 1000
-      );
-      licencia.ultima_validacion = new Date();
+    const ahora = new Date();
+
+    // 🔹 Manejo de instalación y recálculo de expiración
+    // Recalculamos si:
+    // 1. No tiene hash (primera activación)
+    // 2. Está en estado demo pero tiene tipo anual/permanente (acaba de ser convertida)
+    // 3. Ya expiró (está bloqueada o la fecha es pasada)
+    const acabadaDeConvertir = licencia.estado === ESTADOS.DEMO && (licencia.tipo_licencia === 'anual' || licencia.tipo_licencia === 'permanente');
+    const expirada = licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora;
+
+    // Si ya expiró, forzar estado bloqueado antes de cualquier otra lógica si no se va a recalcular
+    if (expirada && !acabadaDeConvertir && licencia.instalacion_hash === instalacion_hash) {
+      licencia.estado = ESTADOS.BLOQUEADO;
+      await licencia.save();
+      return {
+        estado: ESTADOS.BLOQUEADO,
+        tipo_licencia: licencia.tipo_licencia,
+        expira: licencia.fecha_expiracion,
+        dias_restantes: 0,
+        instalacion_hash: licencia.instalacion_hash,
+        app: licencia.app,
+        version_app: version_app || licencia.version_app || null,
+        mensaje: "licencia_expirada",
+      };
+    }
+
+    if (!licencia.instalacion_hash || acabadaDeConvertir) {
+      // Asignar hash si no tenía
+      if (!licencia.instalacion_hash) {
+        licencia.instalacion_hash = instalacion_hash;
+      } else if (licencia.instalacion_hash !== instalacion_hash) {
+        return {
+          error: "instalacion_invalida",
+          mensaje: "El hash de instalación no coincide con el registrado",
+        };
+      }
+
+      licencia.fecha_activacion = ahora;
+
+      // Determinar días según tipo de licencia
+      let diasParaAgregar = licencia.dias_demo || 15;
+      if (licencia.tipo_licencia === 'anual') {
+        diasParaAgregar = licencia.dias_licencia || 365;
+      } else if (licencia.tipo_licencia === 'permanente') {
+        diasParaAgregar = null;
+      }
+
+      if (diasParaAgregar !== null) {
+        licencia.fecha_expiracion = new Date(
+          ahora.getTime() + diasParaAgregar * 24 * 60 * 60 * 1000
+        );
+      } else {
+        licencia.fecha_expiracion = null;
+      }
+
+      // Si es la primera activación de una demo, mantener estado demo
+      // Si es una conversión a anual/permanente, pasar a activa
+      licencia.estado = (licencia.tipo_licencia === 'demo') ? ESTADOS.DEMO : ESTADOS.ACTIVA;
+      licencia.ultima_validacion = ahora;
       licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
       if (version_app) licencia.version_app = version_app;
       await licencia.save();
@@ -87,8 +157,7 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
       };
     }
 
-    // 🔹 Validar expiración
-    const ahora = new Date();
+    // 🔹 Validar expiración (Post-activación/re-activación)
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
       licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
@@ -102,6 +171,12 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
         version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
       };
+    }
+
+    // Asegurar que si llegamos aquí está activa
+    if (licencia.estado !== ESTADOS.ACTIVA) {
+      licencia.estado = ESTADOS.ACTIVA;
+      await licencia.save();
     }
 
     return {
@@ -126,8 +201,8 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → crear automáticamente una licencia DEMO
     if (!licencia) {
@@ -238,7 +313,7 @@ const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
 };
 
 // Crear licencia (solo admin) - SIN instalacion_hash aún
-const crearLicencia = async (nit, app, dias_demo = 15) => {
+const crearLicencia = async (nit, app, dias_demo = 15, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     app = normalizarInput(app);
@@ -263,7 +338,7 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
       fecha_activacion: null,
       fecha_expiracion: null,
       ultima_validacion: null,
-      ultima_ip: null,
+      ultima_ip: ultima_ip || null,
       version_app: null
     });
 
@@ -277,7 +352,7 @@ const crearLicencia = async (nit, app, dias_demo = 15) => {
 };
 
 // Registrar licencia con código firmado HMAC SHA256
-const registrarLicencia = async (nit, instalacion_hash, codigo) => {
+const registrarLicencia = async (nit, instalacion_hash, codigo, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     // Separar payload y firma
@@ -300,12 +375,13 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
       return { error: "licencia_invalida", mensaje: "El NIT no coincide con la licencia" };
     }
 
-    // Buscar licencia existente
+    // Buscar licencia existente (con migración)
     const appNormalizado = normalizarInput(data.app);
-    const licencia = await Licencia.findOne({ where: { nit, app: appNormalizado } });
+    const licencia = await buscarOAdoptarLicencia(nit, appNormalizado);
 
     if (!licencia) {
-      return { error: "no_existe", mensaje: "No existe licencia para este NIT" };
+      console.warn(`[registrarLicencia] Intento de registro fallido: No existe licencia para NIT: ${nit}, APP: ${appNormalizado}`);
+      return { error: "no_existe", mensaje: `No existe licencia para NIT: ${nit} y APP: ${appNormalizado}` };
     }
 
     // Validar hash
@@ -323,6 +399,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
     if (data.exp) {
       licencia.fecha_expiracion = new Date(data.exp);
     }
+    licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
     licencia.updated_at = new Date();
 
     await licencia.save();
@@ -395,8 +472,8 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
     app = normalizarInput(app);
     validarApp(app);
 
-    // 1. Buscar licencia por NIT
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // 1. Buscar licencia por NIT (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → crear automáticamente una en modo demo
     if (!licencia) {
@@ -436,34 +513,56 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
     }
 
     // 3. Leer configuración de la licencia
-    const tipoLicenciaConfig = tipo_licencia || licencia.tipo_licencia || 'demo';
-    const diasDemoConfig = dias_demo !== undefined ? dias_demo : licencia.dias_demo;
-    const diasLicenciaConfig = dias_licencia !== undefined ? dias_licencia : licencia.dias_licencia;
+    // Priorizamos lo que hay en DB si es más "fuerte" (anual/permanente) que lo que viene en el payload (demo)
+    let tipoLicenciaConfig = tipo_licencia || licencia.tipo_licencia || 'demo';
 
-    console.log(`[activarOnline] Tipo de licencia detectado: ${tipoLicenciaConfig}`);
+    if ((licencia.tipo_licencia === 'anual' || licencia.tipo_licencia === 'permanente') && tipo_licencia === 'demo') {
+      console.log(`[activarOnline] Intento de downgrade detectado para NIT: ${nit}, APP: ${app}. Manteniendo tipo: ${licencia.tipo_licencia}`);
+      tipoLicenciaConfig = licencia.tipo_licencia;
+    }
+
+    const diasDemoConfig = dias_demo !== undefined ? dias_demo : licencia.dias_demo;
+    // Si la licencia ya existe en DB y es anual, priorizamos sus días sobre lo que diga el payload para evitar errores
+    let diasLicenciaConfig = (licencia.tipo_licencia === 'anual' && licencia.dias_licencia)
+      ? licencia.dias_licencia
+      : (dias_licencia !== undefined ? dias_licencia : (licencia.dias_licencia || 365));
+
+    console.log(`[activarOnline] Tipo de licencia final: ${tipoLicenciaConfig}`);
 
     // 4. Aplicar lógica según tipo_licencia
     const ahora = new Date();
-    let fechaExpiracion = null;
+    let fechaExpiracion = licencia.fecha_expiracion;
     let diasAplicados = 0;
 
-    if (tipoLicenciaConfig === 'demo') {
-      diasAplicados = diasDemoConfig || 15;
-      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
-      console.log(`[activarOnline] Licencia DEMO - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
-    } else if (tipoLicenciaConfig === 'anual') {
-      diasAplicados = diasLicenciaConfig || 365;
-      fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
-      console.log(`[activarOnline] Licencia ANUAL - Días aplicados: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
-    } else if (tipoLicenciaConfig === 'permanente') {
-      fechaExpiracion = null;
-      console.log(`[activarOnline] Licencia PERMANENTE - Sin expiración`);
+    // Solo recalculamos la fecha de expiración si:
+    // - La licencia no está activa (ej: es nueva o acaba de ser convertida y su estado es 'demo')
+    // - O si el tipo de licencia cambió
+    // - O si ya expiró (está bloqueada)
+    const debeRecalcular = licencia.estado !== ESTADOS.ACTIVA ||
+                           licencia.tipo_licencia !== tipoLicenciaConfig ||
+                           (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora);
+
+    if (debeRecalcular) {
+      if (tipoLicenciaConfig === 'demo') {
+        diasAplicados = diasDemoConfig || 15;
+        fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+        console.log(`[activarOnline] Recalculando DEMO - NIT: ${nit}, APP: ${app}, Días: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+      } else if (tipoLicenciaConfig === 'anual') {
+        diasAplicados = diasLicenciaConfig || 365;
+        fechaExpiracion = new Date(ahora.getTime() + diasAplicados * 24 * 60 * 60 * 1000);
+        console.log(`[activarOnline] Recalculando ANUAL - NIT: ${nit}, APP: ${app}, Días: ${diasAplicados}, Expiración: ${fechaExpiracion.toISOString()}`);
+      } else if (tipoLicenciaConfig === 'permanente') {
+        fechaExpiracion = null;
+        console.log(`[activarOnline] Recalculando PERMANENTE - Sin expiración`);
+      }
+      licencia.fecha_activacion = ahora;
+      licencia.fecha_expiracion = fechaExpiracion;
+    } else {
+      console.log(`[activarOnline] Manteniendo fecha de expiración existente: ${fechaExpiracion ? fechaExpiracion.toISOString() : 'NULL'}`);
     }
 
     // 5. Actualizar campos de la licencia
     licencia.tipo_licencia = tipoLicenciaConfig;
-    licencia.fecha_activacion = ahora;
-    licencia.fecha_expiracion = fechaExpiracion;
     licencia.estado = ESTADOS.ACTIVA;
     licencia.ultima_validacion = ahora;
     licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
@@ -498,7 +597,7 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 };
 
 // Convertir licencia demo a real (anual o permanente)
-const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash) => {
+const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash, ultima_ip) => {
   try {
     nit = normalizarInput(nit);
     app = normalizarInput(app);
@@ -514,8 +613,8 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
       throw new Error("dias_requeridos");
     }
 
-    // 1. Buscar licencia por NIT y APP
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // 1. Buscar licencia por NIT y APP (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     if (!licencia) {
       console.log(`[convertirLicencia] Licencia no encontrada para NIT: '${nit}' (len: ${nit ? nit.length : 0}), APP: '${app}' (len: ${app ? app.length : 0}). Creando nueva para conversión.`);
@@ -532,7 +631,7 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
         fecha_activacion: null,
         fecha_expiracion: null,
         ultima_validacion: null,
-        ultima_ip: null,
+        ultima_ip: ultima_ip || null,
         version_app: null
       });
 
@@ -569,6 +668,8 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
       licencia.dias_licencia = null;
     }
 
+    licencia.ultima_ip = ultima_ip || licencia.ultima_ip;
+
     // Guardar cambios
     await licencia.save();
 
@@ -593,8 +694,8 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia
-    const licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia (con migración)
+    const licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → error "no_autorizado"
     if (!licencia) {
