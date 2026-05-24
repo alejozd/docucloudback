@@ -52,6 +52,26 @@ const normalizarInput = (val) => {
   return typeof val === 'string' ? val.trim() : val;
 };
 
+// Helper para buscar licencia por nit+app, con soporte para migración de registros legados ('desconocido')
+const buscarOAdoptarLicencia = async (nit, app) => {
+  // 1. Intentar búsqueda exacta
+  let licencia = await Licencia.findOne({ where: { nit, app } });
+
+  if (licencia) return licencia;
+
+  // 2. Si no existe, buscar registro legado con app 'desconocido'
+  let licenciaLegada = await Licencia.findOne({ where: { nit, app: 'desconocido' } });
+
+  if (licenciaLegada) {
+    console.log(`[Migration] Migrando licencia legada para NIT: ${nit} de 'desconocido' a '${app}'`);
+    licenciaLegada.app = app;
+    await licenciaLegada.save();
+    return licenciaLegada;
+  }
+
+  return null;
+};
+
 // Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
@@ -59,8 +79,8 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia por NIT
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia por NIT y APP (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // ❌ NUEVO COMPORTAMIENTO: Si no existe → error "no_autorizado"
     if (!licencia) {
@@ -140,8 +160,8 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → crear automáticamente una licencia DEMO
     if (!licencia) {
@@ -314,9 +334,9 @@ const registrarLicencia = async (nit, instalacion_hash, codigo) => {
       return { error: "licencia_invalida", mensaje: "El NIT no coincide con la licencia" };
     }
 
-    // Buscar licencia existente
+    // Buscar licencia existente (con migración)
     const appNormalizado = normalizarInput(data.app);
-    const licencia = await Licencia.findOne({ where: { nit, app: appNormalizado } });
+    const licencia = await buscarOAdoptarLicencia(nit, appNormalizado);
 
     if (!licencia) {
       console.warn(`[registrarLicencia] Intento de registro fallido: No existe licencia para NIT: ${nit}, APP: ${appNormalizado}`);
@@ -410,8 +430,8 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
     app = normalizarInput(app);
     validarApp(app);
 
-    // 1. Buscar licencia por NIT
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // 1. Buscar licencia por NIT (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → crear automáticamente una en modo demo
     if (!licencia) {
@@ -551,8 +571,8 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
       throw new Error("dias_requeridos");
     }
 
-    // 1. Buscar licencia por NIT y APP
-    let licencia = await Licencia.findOne({ where: { nit, app } });
+    // 1. Buscar licencia por NIT y APP (con migración)
+    let licencia = await buscarOAdoptarLicencia(nit, app);
 
     if (!licencia) {
       console.log(`[convertirLicencia] Licencia no encontrada para NIT: '${nit}' (len: ${nit ? nit.length : 0}), APP: '${app}' (len: ${app ? app.length : 0}). Creando nueva para conversión.`);
@@ -630,8 +650,8 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
     app = normalizarInput(app);
     validarApp(app);
 
-    // Buscar licencia
-    const licencia = await Licencia.findOne({ where: { nit, app } });
+    // Buscar licencia (con migración)
+    const licencia = await buscarOAdoptarLicencia(nit, app);
 
     // Si no existe → error "no_autorizado"
     if (!licencia) {

@@ -589,4 +589,47 @@ describe("Licencia Service", () => {
       expect(resultado.dias_restantes).toBeGreaterThan(360);
     });
   });
+
+  describe("Migración de registros legados ('desconocido')", () => {
+    const nit = "52355922";
+    const app = "PurchaseBridge";
+
+    it("debe adoptar una licencia con app 'desconocido' si no existe la específica", async () => {
+      const mockLicenciaLegada = {
+        nit,
+        app: "desconocido",
+        estado: "demo",
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      // Primera llamada a findOne devuelve null (búsqueda exacta)
+      // Segunda llamada devuelve la legada
+      mockLicenciaModel.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockLicenciaLegada);
+
+      const resultado = await licenciaService.convertirLicencia(nit, app, "anual", 365);
+
+      expect(mockLicenciaLegada.app).toBe(app);
+      expect(mockLicenciaLegada.save).toHaveBeenCalled();
+      expect(resultado.ok).toBe(true);
+      expect(resultado.mensaje).toContain("actualizada");
+    });
+
+    it("no debe intentar migrar si ya existe un registro exacto", async () => {
+      const mockLicenciaExacta = {
+        nit,
+        app,
+        estado: "demo",
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicenciaExacta);
+
+      await licenciaService.validarLicencia(nit, "hash", app);
+
+      expect(mockLicenciaModel.findOne).toHaveBeenCalledTimes(1);
+      expect(mockLicenciaExacta.app).toBe(app);
+    });
+  });
 });
