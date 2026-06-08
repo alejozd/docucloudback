@@ -1,36 +1,49 @@
-# 📥 Módulo de Descarga de Audio desde YouTube
+# 📥 Módulo de Descarga de Audio desde YouTube (Asíncrono)
 
-## Archivos Creados
+## Descripción
 
-Se han creado los siguientes archivos nuevos **sin modificar ningún archivo existente**:
+Módulo asíncrono para descargar audio desde YouTube y convertirlo a MP3. Diseñado específicamente para evitar timeouts de Cloudflare (límite de 100 segundos) mediante descargas en segundo plano con polling de estado.
+
+## Flujo de Trabajo
+
+```
+┌─────────┐      POST /download       ┌──────────┐
+│ Cliente │ ────────────────────────> │ Servidor │
+└─────────┘                           └──────────┘
+     │                                      │
+     │         202 Accepted                 │
+     │    { filename, statusUrl }           │
+     │ <────────────────────────            │
+     │                                      │
+     │   GET /status/:filename (polling)    │
+     │ ────────────────────────────────>    │
+     │         { status: "downloading" }    │
+     │ <───────────────────────────────     │
+     │                                      │
+     │   GET /status/:filename (polling)    │
+     │ ────────────────────────────────>    │
+     │         { status: "completed" }      │
+     │ <───────────────────────────────     │
+     │                                      │
+     │   GET /download/:filename            │
+     │ ────────────────────────────────>    │
+     │         [Archivo MP3]                │
+     │ <───────────────────────────────     │
+```
+
+## Archivos del Módulo
 
 ```
 src/
 ├── services/
-│   └── ytDlpService.js           # Servicio que ejecuta yt-dlp
+│   └── ytDlpService.js           # Servicio que ejecuta yt-dlp en background
 ├── controllers/
-│   └── audioDownloadController.js # Controlador con la lógica
+│   └── audioDownloadController.js # Controlador con lógica asíncrona
 └── routes/
     └── audioDownloadRoutes.js     # Rutas del módulo
 
 downloads/
 └── audios/                        # Carpeta donde se guardan los MP3
-```
-
-## Cambios en `src/index.js`
-
-Se agregaron 2 líneas al archivo principal:
-
-1. **Línea 77** - Importación del router:
-```javascript
-const audioDownloadRoutes = require("./routes/audioDownloadRoutes");
-```
-
-2. **Líneas 207-209** - Registro de rutas:
-```javascript
-// Montar rutas de descarga de audio desde YouTube
-app.use("/api/audio-download", audioDownloadRoutes);
-console.log('✅ Audio download routes mounted at /api/audio-download');
 ```
 
 ## Dependencias Requeridas
@@ -70,15 +83,19 @@ La carpeta se crea automáticamente al iniciar el servidor.
 
 ## Endpoints Disponibles
 
-Todos los endpoints están protegidos con autenticación JWT y usan el prefijo `/api/audio-download`.
+Todos los endpoints están protegidos con autenticación por API Key.
 
-### 1. Descargar Audio desde YouTube
+---
+
+### 1. Iniciar Descarga de Audio (NO BLOQUEANTE)
 
 **POST** `/api/audio-download/download`
 
+Inicia la descarga en segundo plano y retorna **inmediatamente** con código `202 Accepted`.
+
 **Headers:**
 ```
-Authorization: Bearer <tu-token-jwt>
+x-api-key: tu-zam-api-key
 Content-Type: application/json
 ```
 
@@ -89,13 +106,15 @@ Content-Type: application/json
 }
 ```
 
-**Respuesta Exitosa (200):**
+**Respuesta Exitosa (202):**
 ```json
 {
   "success": true,
-  "message": "Audio descargado exitosamente",
-  "filename": "Nombre_del_Video.mp3",
-  "downloadUrl": "/api/audio-download/download/Nombre_del_Video.mp3"
+  "message": "Descarga iniciada en segundo plano",
+  "filename": "video_dQw4w9WgXcQ.mp3",
+  "status": "downloading",
+  "statusUrl": "/api/audio-download/status/video_dQw4w9WgXcQ.mp3",
+  "downloadUrl": "/api/audio-download/download/video_dQw4w9WgXcQ.mp3"
 }
 ```
 
@@ -109,13 +128,75 @@ Content-Type: application/json
 
 ---
 
-### 2. Listar Archivos MP3 Descargados
+### 2. Verificar Estado de Descarga (POLLING)
 
-**GET** `/api/audio-download/files`
+**GET** `/api/audio-download/status/:filename`
+
+Verifica el estado actual de una descarga en curso.
 
 **Headers:**
 ```
-Authorization: Bearer <tu-token-jwt>
+x-api-key: tu-zam-api-key
+```
+
+**Respuestas Posibles:**
+
+**a) Descarga en progreso:**
+```json
+{
+  "success": true,
+  "status": "downloading",
+  "filename": "video_dQw4w9WgXcQ.mp3",
+  "progress": 45.5,
+  "startedAt": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**b) Descarga completada:**
+```json
+{
+  "success": true,
+  "status": "completed",
+  "filename": "video_dQw4w9WgXcQ.mp3",
+  "size": 5242880,
+  "sizeFormatted": "5 MB",
+  "progress": 100,
+  "startedAt": "2025-01-15T10:30:00.000Z",
+  "completedAt": "2025-01-15T10:32:00.000Z"
+}
+```
+
+**c) Descarga fallida:**
+```json
+{
+  "success": true,
+  "status": "failed",
+  "filename": "video_dQw4w9WgXcQ.mp3",
+  "error": "URL no disponible",
+  "startedAt": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**d) Archivo no encontrado:**
+```json
+{
+  "success": true,
+  "status": "not_found",
+  "filename": "video_dQw4w9WgXcQ.mp3"
+}
+```
+
+---
+
+### 3. Listar Archivos MP3 Descargados
+
+**GET** `/api/audio-download/files`
+
+Lista todos los archivos MP3 completados en el servidor.
+
+**Headers:**
+```
+x-api-key: tu-zam-api-key
 ```
 
 **Respuesta Exitosa (200):**
@@ -128,8 +209,8 @@ Authorization: Bearer <tu-token-jwt>
       "name": "Cancion_Ejemplo.mp3",
       "size": 5242880,
       "sizeFormatted": "5 MB",
-      "createdAt": "2025-06-08T18:30:00.000Z",
-      "modifiedAt": "2025-06-08T18:30:00.000Z",
+      "createdAt": "2025-01-15T10:32:00.000Z",
+      "modifiedAt": "2025-01-15T10:32:00.000Z",
       "downloadUrl": "/api/audio-download/download/Cancion_Ejemplo.mp3"
     }
   ]
@@ -138,122 +219,226 @@ Authorization: Bearer <tu-token-jwt>
 
 ---
 
-### 3. Descargar un Archivo MP3 Específico
+### 4. Descargar un Archivo MP3 Específico
 
 **GET** `/api/audio-download/download/:filename`
 
+Descarga el archivo MP3 cuando el estado es "completed".
+
 **Headers:**
 ```
-Authorization: Bearer <tu-token-jwt>
+x-api-key: tu-zam-api-key
 ```
 
 **Ejemplo:**
 ```
-GET /api/audio-download/download/Mi_Cancion.mp3
+GET /api/audio-download/download/video_dQw4w9WgXcQ.mp3
 ```
 
 **Respuesta:** El archivo MP3 se descarga directamente (binary stream).
 
 ---
 
-### 4. Eliminar un Archivo MP3
+### 5. Eliminar un Archivo MP3
 
 **DELETE** `/api/audio-download/delete/:filename`
 
+Elimina un archivo MP3 del servidor.
+
 **Headers:**
 ```
-Authorization: Bearer <tu-token-jwt>
+x-api-key: tu-zam-api-key
 ```
 
 **Ejemplo:**
 ```
-DELETE /api/audio-download/delete/Mi_Cancion.mp3
+DELETE /api/audio-download/delete/Cancion_Ejemplo.mp3
 ```
 
 **Respuesta Exitosa (200):**
 ```json
 {
   "success": true,
-  "message": "Archivo \"Mi_Cancion.mp3\" eliminado exitosamente"
+  "message": "Archivo \"Cancion_Ejemplo.mp3\" eliminado exitosamente"
 }
 ```
 
+---
+
 ## Ejemplos de Prueba con cURL
 
-### 1. Obtener Token JWT (si no tienes uno)
-
-```bash
-curl -X POST http://localhost:3100/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"tu@email.com","password":"tu-password"}'
-```
-
-Guarda el token de la respuesta.
-
-### 2. Descargar Audio desde YouTube
+### 1. Iniciar Descarga (Retorna inmediatamente)
 
 ```bash
 curl -X POST http://localhost:3100/api/audio-download/download \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
+  -H "x-api-key: tu-zam-api-key" \
   -d '{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
-### 3. Listar Archivos Descargados
+**Respuesta:**
+```json
+{
+  "success": true,
+  "filename": "video_dQw4w9WgXcQ.mp3",
+  "status": "downloading",
+  "statusUrl": "/api/audio-download/status/video_dQw4w9WgXcQ.mp3"
+}
+```
+
+### 2. Verificar Estado (Polling cada 5 segundos)
+
+```bash
+# Primer check (a los 5 segundos)
+curl -X GET http://localhost:3100/api/audio-download/status/video_dQw4w9WgXcQ.mp3 \
+  -H "x-api-key: tu-zam-api-key"
+
+# Respuesta: {"status": "downloading", "progress": 30}
+
+# Segundo check (a los 10 segundos)
+curl -X GET http://localhost:3100/api/audio-download/status/video_dQw4w9WgXcQ.mp3 \
+  -H "x-api-key: tu-zam-api-key"
+
+# Respuesta: {"status": "downloading", "progress": 75}
+
+# Tercer check (a los 15 segundos)
+curl -X GET http://localhost:3100/api/audio-download/status/video_dQw4w9WgXcQ.mp3 \
+  -H "x-api-key: tu-zam-api-key"
+
+# Respuesta: {"status": "completed", "size": 5242880}
+```
+
+### 3. Descargar Archivo (cuando status = completed)
+
+```bash
+curl -X GET http://localhost:3100/api/audio-download/download/video_dQw4w9WgXcQ.mp3 \
+  -H "x-api-key: tu-zam-api-key" \
+  -o downloaded_audio.mp3
+```
+
+### 4. Listar Archivos Descargados
 
 ```bash
 curl -X GET http://localhost:3100/api/audio-download/files \
-  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI"
-```
-
-### 4. Descargar un Archivo MP3
-
-```bash
-curl -X GET http://localhost:3100/api/audio-download/download/NOMBRE_DEL_ARCHIVO.mp3 \
-  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
-  -o downloaded_audio.mp3
+  -H "x-api-key: tu-zam-api-key"
 ```
 
 ### 5. Eliminar un Archivo
 
 ```bash
-curl -X DELETE http://localhost:3100/api/audio-download/delete/NOMBRE_DEL_ARCHIVO.mp3 \
-  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI"
+curl -X DELETE http://localhost:3100/api/audio-download/delete/video_dQw4w9WgXcQ.mp3 \
+  -H "x-api-key: tu-zam-api-key"
 ```
+
+---
 
 ## Ejemplos de Prueba con Postman
 
 ### Colección de Requests
 
-1. **Descargar Audio**
-   - Method: POST
-   - URL: `http://localhost:3100/api/audio-download/download`
-   - Headers:
-     - `Content-Type: application/json`
-     - `Authorization: Bearer {{jwt_token}}`
-   - Body (raw JSON):
-     ```json
-     {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
-     ```
+#### 1. Iniciar Descarga
+- **Method:** POST
+- **URL:** `http://localhost:3100/api/audio-download/download`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `x-api-key: tu-zam-api-key`
+- **Body (raw JSON):**
+  ```json
+  {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+  ```
+- **Guardar** el `filename` de la respuesta
 
-2. **Listar Archivos**
-   - Method: GET
-   - URL: `http://localhost:3100/api/audio-download/files`
-   - Headers:
-     - `Authorization: Bearer {{jwt_token}}`
+#### 2. Verificar Estado (Polling)
+- **Method:** GET
+- **URL:** `http://localhost:3100/api/audio-download/status/{{filename}}`
+- **Headers:**
+  - `x-api-key: tu-zam-api-key`
+- **Repetir** cada 5 segundos hasta que `status` sea "completed"
 
-3. **Descargar Archivo**
-   - Method: GET
-   - URL: `http://localhost:3100/api/audio-download/download/NOMBRE_ARCHIVO.mp3`
-   - Headers:
-     - `Authorization: Bearer {{jwt_token}}`
-   - Configura "Save Response to File" en Postman
+#### 3. Descargar Archivo
+- **Method:** GET
+- **URL:** `http://localhost:3100/api/audio-download/download/{{filename}}`
+- **Headers:**
+  - `x-api-key: tu-zam-api-key`
+- **Configurar:** "Save Response to File" en la pestaña Settings
 
-4. **Eliminar Archivo**
-   - Method: DELETE
-   - URL: `http://localhost:3100/api/audio-download/delete/NOMBRE_ARCHIVO.mp3`
-   - Headers:
-     - `Authorization: Bearer {{jwt_token}}`
+#### 4. Listar Archivos
+- **Method:** GET
+- **URL:** `http://localhost:3100/api/audio-download/files`
+- **Headers:**
+  - `x-api-key: tu-zam-api-key`
+
+#### 5. Eliminar Archivo
+- **Method:** DELETE
+- **URL:** `http://localhost:3100/api/audio-download/delete/{{filename}}`
+- **Headers:**
+  - `x-api-key: tu-zam-api-key`
+
+---
+
+## Script de Polling Automático (JavaScript/Node.js)
+
+```javascript
+const axios = require('axios');
+
+async function downloadWithPolling(videoUrl, apiKey) {
+  const BASE_URL = 'http://localhost:3100/api/audio-download';
+  
+  // 1. Iniciar descarga
+  console.log('📥 Iniciando descarga...');
+  const startResponse = await axios.post(
+    `${BASE_URL}/download`,
+    { url: videoUrl },
+    { headers: { 'x-api-key': apiKey } }
+  );
+  
+  const { filename, statusUrl } = startResponse.data;
+  console.log(`✅ Descarga iniciada. Filename: ${filename}`);
+  
+  // 2. Polling para verificar estado
+  let status = 'downloading';
+  while (status === 'downloading') {
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
+    
+    const statusResponse = await axios.get(
+      `${BASE_URL}/status/${filename}`,
+      { headers: { 'x-api-key': apiKey } }
+    );
+    
+    status = statusResponse.data.status;
+    console.log(`📊 Estado: ${status} (${statusResponse.data.progress || 0}%)`);
+    
+    if (status === 'failed') {
+      throw new Error(`Descarga fallida: ${statusResponse.data.error}`);
+    }
+  }
+  
+  // 3. Descargar archivo
+  console.log('⬇️  Descargando archivo...');
+  const fileResponse = await axios.get(
+    `${BASE_URL}/download/${filename}`,
+    { 
+      headers: { 'x-api-key': apiKey },
+      responseType: 'stream'
+    }
+  );
+  
+  // Guardar archivo o procesar stream
+  return { filename, size: statusResponse.data.size };
+}
+
+// Uso
+downloadWithPolling(
+  'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'tu-zam-api-key'
+).then(result => {
+  console.log('✅ Descarga completada:', result);
+}).catch(err => {
+  console.error('❌ Error:', err.message);
+});
+```
+
+---
 
 ## Reiniciar el Servidor con PM2
 
@@ -281,19 +466,27 @@ pm2 logs nombre-de-tu-app --lines 50
 ✅ **Validación de URL**: Solo se aceptan URLs de youtube.com o youtu.be  
 ✅ **Sanitización de nombres**: Se eliminan caracteres peligrosos  
 ✅ **Path traversal prevention**: Uso de `path.basename()` para evitar acceso a otras carpetas  
-✅ **Autenticación JWT**: Todas las rutas requieren token válido  
-✅ **Timeout**: Las descargas tienen timeout de 5 minutos  
-✅ **Logs**: Todos los procesos quedan registrados para debugging  
+✅ **Autenticación por API Key**: Todas las rutas requieren `x-api-key` válido  
+✅ **Timeout extendido**: Las descargas en background tienen timeout de 10 minutos  
+✅ **Logs detallados**: Todos los procesos quedan registrados para debugging  
+✅ **Sin bloqueo**: El endpoint POST retorna inmediatamente (202 Accepted)  
+
+---
 
 ## Logs y Debugging
 
-El módulo genera logs con el prefijo `[ytDlpService]` y `[audioDownloadController]`.
+El módulo genera logs con los prefijos:
+- `[ytDlpService]` - Servicio de descarga
+- `[ytDlpService] [BG]` - Descargas en segundo plano
+- `[audioDownloadController]` - Controlador
 
 Para verlos en tiempo real:
 
 ```bash
 pm2 logs nombre-de-tu-app | grep -E "(ytDlpService|audioDownloadController)"
 ```
+
+---
 
 ## Solución de Problemas
 
@@ -313,13 +506,20 @@ Asegúrate de usar URLs válidas de YouTube:
 - ✅ `https://www.youtube.com/shorts/XXXXX`
 - ❌ `https://vimeo.com/XXXXX` (no soportado)
 
-### Error: "Tiempo de espera agotado"
+### La descarga nunca completa
 
-La descarga tomó más de 5 minutos. Esto puede pasar con videos muy largos o conexiones lentas.
+Verifica los logs del servidor. Puede ser:
+- Conexión lenta a internet
+- Video muy largo (>1 hora)
+- Restricciones geográficas del video
 
-### La carpeta de descargas no se crea
+### Timeout después de 10 minutos
 
-Verifica que el proceso tenga permisos de escritura en el directorio del proyecto.
+Videos extremadamente largos pueden exceder el timeout. Considera:
+- Dividir videos largos en segmentos
+- Aumentar el timeout en `ytDlpService.js`
+
+---
 
 ## Notas Importantes
 
@@ -327,4 +527,27 @@ Verifica que el proceso tenga permisos de escritura en el directorio del proyect
 
 ⚠️ **Espacio en disco**: Los archivos de audio se acumulan en el servidor. Implementa una política de limpieza periódica si es necesario.
 
-⚠️ **Rendimiento**: Las descargas son operaciones bloqueantes. Para producción con alto tráfico, considera usar colas de trabajo (ej. Bull + Redis).
+⚠️ **Cloudflare**: Este módulo está diseñado específicamente para evitar el límite de 100 segundos de Cloudflare mediante descargas asíncronas con polling.
+
+⚠️ **Memoria**: El estado de las descargas se mantiene en memoria (Map). Si reinicias el servidor, perderás el tracking de descargas en curso (pero los archivos completados permanecerán).
+
+---
+
+## Comparación: Antes vs Después
+
+### ANTES (Bloqueante - Causa Timeout)
+
+```
+Cliente → POST /download ─────[espera 150 segundos]─────→ 200 OK o 524 Timeout
+                                                        (Cloudflare cierra)
+```
+
+### DESPUÉS (Asíncrono - Sin Timeout)
+
+```
+Cliente → POST /download ──→ 202 Accepted (inmediato)
+         GET /status ──────→ "downloading" (5s)
+         GET /status ──────→ "downloading" (10s)
+         GET /status ──────→ "completed" (15s)
+         GET /download ────→ 200 OK + archivo
+```

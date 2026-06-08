@@ -5,6 +5,9 @@ const fs = require('fs');
 // Obtener ruta de descargas desde variable de entorno o usar default
 const DOWNLOAD_PATH = process.env.AUDIO_DOWNLOAD_PATH || path.join(__dirname, '../../downloads/audios');
 
+// Almacenar estado de las descargas en curso
+const downloadStatus = new Map();
+
 /**
  * Asegura que la carpeta de descargas exista
  */
@@ -46,7 +49,35 @@ function sanitizeFilename(filename) {
 }
 
 /**
- * Ejecuta yt-dlp para descargar y convertir audio a MP3
+ * Genera un nombre de archivo seguro basado en la URL
+ * @param {string} url - URL del video
+ * @returns {string} - Nombre de archivo generado
+ */
+function generateFilenameFromUrl(url) {
+  try {
+    // Extraer ID del video de YouTube
+    let videoId = '';
+    const urlObj = new URL(url);
+    
+    if (urlObj.hostname.includes('youtu.be')) {
+      videoId = urlObj.pathname.slice(1);
+    } else if (urlObj.hostname.includes('youtube.com')) {
+      videoId = urlObj.searchParams.get('v') || '';
+    }
+    
+    if (videoId) {
+      return `video_${videoId}.mp3`;
+    }
+  } catch (e) {
+    // Si falla el parseo, usar timestamp
+  }
+  
+  // Fallback: usar timestamp único
+  return `audio_${Date.now()}.mp3`;
+}
+
+/**
+ * Ejecuta yt-dlp para descargar y convertir audio a MP3 (versión síncrona)
  * @param {string} url - URL del video de YouTube
  * @returns {Promise<{success: boolean, filename?: string, error?: string}>}
  */
@@ -170,10 +201,233 @@ function downloadAudio(url) {
   });
 }
 
+/**
+ * Inicia una descarga de audio en segundo plano (sin esperar)
+ * @param {string} url - URL del video de YouTube
+ * @returns {{filename: string, expectedPath: string}} - Información de la tarea iniciada
+ */
+function startBackgroundDownload(url) {
+  // Validar URL primero
+  if (!isValidYouTubeUrl(url)) {
+    throw new Error('URL inválida. Debe ser una URL de YouTube (youtube.com o youtu.be)');
+  }
+
+  // Asegurar que el directorio existe
+  ensureDownloadDirectory();
+
+  // Generar nombre de archivo esperado
+  const expectedFilename = generateFilenameFromUrl(url);
+  const expectedPath = path.join(DOWNLOAD_PATH, expectedFilename);
+
+  // Registrar estado inicial
+  downloadStatus.set(expectedFilename, {
+    status: 'downloading',
+    url: url,
+    startedAt: new Date().toISOString(),
+    progress: 0
+  });
+
+  // Template de salida - yt-dlp decidirá el nombre final
+  const outputTemplate = path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s');
+
+  // Argumentos de yt-dlp
+  const args = [
+    '-x',                        // Extraer audio
+    '--audio-format', 'mp3',     // Convertir a MP3
+    '--audio-quality', '0',      // Máxima calidad
+    '-o', outputTemplate,        // Template de salida
+    url                         // URL del video
+  ];
+
+  console.log(`[ytDlpService] Iniciando descarga en segundo plano: ${url}`);
+  console.log(`[ytDlpService] Archivo esperado: ${expectedFilename}`);
+
+  // Ejecutar yt-dlp usando spawn (NO esperamos el resultado)
+  const ytDlpProcess = spawn('yt-dlp', args);
+
+  let stderrData = '';
+
+  ytDlpProcess.stdout.on('data', (data) => {
+    const chunk = data.toString();
+    console.log(`[ytDlpService] [BG] STDOUT: ${chunk.trim()}`);
+    
+    // Intentar extraer progreso del output
+    const progressMatch = chunk.match(/\[download\]\s+(\d+\.?\d*)%/);
+    if (progressMatch) {
+      const currentStatus = downloadStatus.get(expectedFilename);
+      if (currentStatus) {
+        currentStatus.progress = parseFloat(progressMatch[1]);
+        downloadStatus.set(expectedFilename, currentStatus);
+      }
+    }
+  });
+
+  ytDlpProcess.stderr.on('data', (data) => {
+    const chunk = data.toString();
+    stderrData += chunk;
+    console.log(`[ytDlpService] [BG] STDERR: ${chunk.trim()}`);
+  });
+
+  ytDlpProcess.on('close', (code) => {
+    const currentStatus = downloadStatus.get(expectedFilename);
+    
+    if (code === 0) {
+      console.log(`[ytDlpService] [BG] Descarga completada con código: ${code}`);
+      
+      // Buscar el archivo MP3 más reciente para obtener el nombre real
+      try {
+        const files = fs.readdirSync(DOWNLOAD_PATH)
+          .filter(file => file.endsWith('.mp3'))
+          .map(file => ({
+            name: file,
+            path: path.join(DOWNLOAD_PATH, file),
+            stats: fs.statSync(path.join(DOWNLOAD_PATH, file))
+          }))
+          .sort((a, b) => b.stats.mtime - a.stats.mtime);
+
+        if (files.length > 0) {
+          const actualFile = files[0];
+          console.log(`[ytDlpService] [BG] Archivo generado: ${actualFile.name}`);
+          
+          // Actualizar estado con el nombre real del archivo
+          downloadStatus.set(actualFile.name, {
+            status: 'completed',
+            url: url,
+            startedAt: currentStatus?.startedAt || new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            progress: 100,
+            filename: actualFile.name,
+            size: actualFile.stats.size
+          });
+          
+          // Si el nombre es diferente al esperado, también actualizar esa entrada
+          if (actualFile.name !== expectedFilename && currentStatus) {
+            currentStatus.status = 'completed';
+            currentStatus.completedAt = new Date().toISOString();
+            currentStatus.actualFilename = actualFile.name;
+            downloadStatus.set(expectedFilename, currentStatus);
+          }
+        }
+      } catch (err) {
+        console.error('[ytDlpService] [BG] Error al buscar archivo:', err.message);
+        if (currentStatus) {
+          currentStatus.status = 'failed';
+          currentStatus.error = 'Archivo no encontrado después de la descarga';
+          downloadStatus.set(expectedFilename, currentStatus);
+        }
+      }
+    } else {
+      // Error en la descarga
+      console.error(`[ytDlpService] [BG] Error en yt-dlp, código de salida: ${code}`);
+      if (currentStatus) {
+        currentStatus.status = 'failed';
+        currentStatus.error = stderrData || 'Código de error desconocido';
+        downloadStatus.set(expectedFilename, currentStatus);
+      }
+    }
+  });
+
+  ytDlpProcess.on('error', (err) => {
+    console.error('[ytDlpService] [BG] Error al ejecutar yt-dlp:', err.message);
+    const currentStatus = downloadStatus.get(expectedFilename);
+    if (currentStatus) {
+      currentStatus.status = 'failed';
+      currentStatus.error = err.code === 'ENOENT' 
+        ? 'yt-dlp no está instalado' 
+        : err.message;
+      downloadStatus.set(expectedFilename, currentStatus);
+    }
+  });
+
+  // Timeout de 10 minutos para procesos en segundo plano
+  setTimeout(() => {
+    ytDlpProcess.kill('SIGTERM');
+    const currentStatus = downloadStatus.get(expectedFilename);
+    if (currentStatus && currentStatus.status === 'downloading') {
+      currentStatus.status = 'failed';
+      currentStatus.error = 'Tiempo de espera agotado';
+      downloadStatus.set(expectedFilename, currentStatus);
+    }
+  }, 10 * 60 * 1000); // 10 minutos
+
+  return {
+    filename: expectedFilename,
+    expectedPath: expectedPath
+  };
+}
+
+/**
+ * Obtiene el estado de una descarga
+ * @param {string} filename - Nombre del archivo a verificar
+ * @returns {{status: string, filename: string, size?: number, error?: string}}
+ */
+function getDownloadStatus(filename) {
+  // Verificar en el mapa de estados primero
+  const statusInfo = downloadStatus.get(filename);
+  
+  if (statusInfo) {
+    return {
+      status: statusInfo.status,
+      filename: statusInfo.actualFilename || filename,
+      size: statusInfo.size,
+      progress: statusInfo.progress,
+      startedAt: statusInfo.startedAt,
+      completedAt: statusInfo.completedAt,
+      error: statusInfo.error
+    };
+  }
+  
+  // Si no está en el mapa, verificar si el archivo existe
+  const filePath = path.join(DOWNLOAD_PATH, filename);
+  
+  if (fs.existsSync(filePath)) {
+    try {
+      const stats = fs.statSync(filePath);
+      return {
+        status: 'completed',
+        filename: filename,
+        size: stats.size,
+        sizeFormatted: formatFileSize(stats.size),
+        modifiedAt: stats.mtime.toISOString()
+      };
+    } catch (err) {
+      return {
+        status: 'failed',
+        filename: filename,
+        error: 'Error al leer información del archivo'
+      };
+    }
+  }
+  
+  // Archivo no encontrado
+  return {
+    status: 'not_found',
+    filename: filename
+  };
+}
+
+/**
+ * Formatea el tamaño de archivo en formato legible
+ * @param {number} bytes - Tamaño en bytes
+ * @returns {string} - Tamaño formateado
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 module.exports = {
   downloadAudio,
+  startBackgroundDownload,
+  getDownloadStatus,
   isValidYouTubeUrl,
   sanitizeFilename,
+  generateFilenameFromUrl,
   getDownloadPath: () => DOWNLOAD_PATH,
   ensureDownloadDirectory
 };

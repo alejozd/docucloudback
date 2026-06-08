@@ -3,8 +3,12 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Controlador para descargar audio desde YouTube
+ * Controlador para descargar audio desde YouTube (asíncrono - no bloqueante)
  * POST /api/audio-download/download
+ * 
+ * Este endpoint inicia la descarga en segundo plano y retorna inmediatamente
+ * con código 202 Accepted. El cliente debe hacer polling al endpoint de status
+ * para verificar cuando la descarga esté completa.
  */
 const downloadAudio = async (req, res) => {
   try {
@@ -29,30 +33,75 @@ const downloadAudio = async (req, res) => {
       });
     }
 
-    // Ejecutar la descarga (asíncrona pero esperamos la respuesta)
-    console.log('[audioDownloadController] Iniciando proceso de descarga...');
-    const result = await ytDlpService.downloadAudio(url);
+    // Iniciar descarga en segundo plano (NO esperamos a que termine)
+    console.log('[audioDownloadController] Iniciando descarga en segundo plano...');
+    const taskInfo = ytDlpService.startBackgroundDownload(url);
 
-    if (result.success) {
-      console.log('[audioDownloadController] Descarga exitosa:', result.filename);
-      return res.status(200).json({
-        success: true,
-        message: result.message || 'Audio descargado exitosamente',
-        filename: result.filename,
-        downloadUrl: `/api/audio-download/download/${encodeURIComponent(result.filename)}`
-      });
-    } else {
-      console.error('[audioDownloadController] Error en descarga:', result.error);
-      return res.status(500).json({
+    console.log('[audioDownloadController] Descarga iniciada, archivo esperado:', taskInfo.filename);
+
+    // Retornar respuesta inmediata con código 202 Accepted
+    return res.status(202).json({
+      success: true,
+      message: 'Descarga iniciada en segundo plano',
+      filename: taskInfo.filename,
+      status: 'downloading',
+      statusUrl: `/api/audio-download/status/${encodeURIComponent(taskInfo.filename)}`,
+      downloadUrl: `/api/audio-download/download/${encodeURIComponent(taskInfo.filename)}`
+    });
+  } catch (error) {
+    console.error('[audioDownloadController] Error al iniciar descarga:', error.message);
+    
+    // Si es un error de validación de URL
+    if (error.message.includes('URL inválida')) {
+      return res.status(400).json({
         success: false,
-        error: result.error
+        error: error.message
       });
     }
-  } catch (error) {
-    console.error('[audioDownloadController] Error inesperado:', error.message);
+    
     return res.status(500).json({
       success: false,
-      error: 'Error interno del servidor al procesar la descarga',
+      error: 'Error interno del servidor al iniciar la descarga',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Controlador para verificar el estado de una descarga
+ * GET /api/audio-download/status/:filename
+ */
+const getDownloadStatus = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    console.log('[audioDownloadController] Verificando estado de:', filename);
+
+    // Sanitizar nombre de archivo para evitar path traversal
+    const sanitizedFilename = path.basename(filename);
+    
+    // Validar que el nombre no esté vacío después de sanitizar
+    if (!sanitizedFilename) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nombre de archivo inválido'
+      });
+    }
+
+    // Obtener estado desde el servicio
+    const statusInfo = ytDlpService.getDownloadStatus(sanitizedFilename);
+
+    console.log('[audioDownloadController] Estado obtenido:', statusInfo.status);
+
+    return res.status(200).json({
+      success: true,
+      ...statusInfo
+    });
+  } catch (error) {
+    console.error('[audioDownloadController] Error al obtener estado:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Error al verificar el estado de la descarga',
       details: error.message
     });
   }
@@ -249,6 +298,7 @@ function formatFileSize(bytes) {
 
 module.exports = {
   downloadAudio,
+  getDownloadStatus,
   listFiles,
   getFile,
   deleteFile
