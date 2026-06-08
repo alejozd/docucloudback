@@ -189,15 +189,6 @@ function downloadAudio(url) {
         });
       }
     });
-
-    // Timeout de 5 minutos para evitar procesos colgados
-    setTimeout(() => {
-      ytDlpProcess.kill('SIGTERM');
-      resolve({
-        success: false,
-        error: 'Tiempo de espera agotado. La descarga tomó demasiado tiempo.'
-      });
-    }, 5 * 60 * 1000); // 5 minutos
   });
 }
 
@@ -339,16 +330,8 @@ function startBackgroundDownload(url) {
     }
   });
 
-  // Timeout de 10 minutos para procesos en segundo plano
-  setTimeout(() => {
-    ytDlpProcess.kill('SIGTERM');
-    const currentStatus = downloadStatus.get(expectedFilename);
-    if (currentStatus && currentStatus.status === 'downloading') {
-      currentStatus.status = 'failed';
-      currentStatus.error = 'Tiempo de espera agotado';
-      downloadStatus.set(expectedFilename, currentStatus);
-    }
-  }, 10 * 60 * 1000); // 10 minutos
+  // SIN TIMEOUT - La descarga puede tardar horas si es necesario
+  // El proceso continuará hasta que termine naturalmente o falle por error real
 
   return {
     filename: expectedFilename,
