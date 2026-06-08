@@ -74,6 +74,7 @@ const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 const licenciaRoutes = require("./routes/licenciaRoutes");
 const telegramRoutes = require("./routes/telegram.routes");
 const apiRoutes = require("./routes/api.routes");
+const audioDownloadRoutes = require("./routes/audioDownloadRoutes");
 
 // Configurar Express
 const app = express();
@@ -202,6 +203,10 @@ if (global.telegramEnabled) {
 } else {
   console.log('ℹ️  Telegram routes skipped (variables not configured)');
 }
+
+// Montar rutas de descarga de audio desde YouTube
+app.use("/api/audio-download", audioDownloadRoutes);
+console.log('✅ Audio download routes mounted at /api/audio-download');
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
