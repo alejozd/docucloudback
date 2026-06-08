@@ -75,6 +75,11 @@ const licenciaRoutes = require("./routes/licenciaRoutes");
 const telegramRoutes = require("./routes/telegram.routes");
 const apiRoutes = require("./routes/api.routes");
 const audioDownloadRoutes = require("./routes/audioDownloadRoutes");
+const ytDlpService = require("./services/ytDlpService");
+
+// Inicializar servicio de descarga de audio y mostrar ruta configurada
+ytDlpService.ensureDownloadDirectory();
+console.log(`📁 Ruta de descargas configurada: ${ytDlpService.getDownloadPath()}`);
 
 // Configurar Express
 const app = express();
