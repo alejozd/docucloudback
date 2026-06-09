@@ -87,6 +87,4 @@ const apiKeyAuth = (req, res, next) => {
   next();
 };
 
-module.exports = {
-  apiKeyAuth
-};
+module.exports = apiKeyAuth;
