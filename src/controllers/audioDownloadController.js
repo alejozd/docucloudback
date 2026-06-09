@@ -184,7 +184,13 @@ const getFile = async (req, res) => {
   try {
     const { filename } = req.params;
     
-    console.log('[audioDownloadController] Solicitud de archivo:', filename);
+    console.log('[getFile] === DEBUG ===');
+    console.log('[getFile] Filename solicitado:', filename);
+    console.log('[getFile] Query params:', req.query);
+    console.log('[getFile] Headers:', req.headers);
+    console.log('[getFile] API Key en query:', req.query.api_key ? req.query.api_key.substring(0, 10) + '...' : 'NINGUNA');
+    console.log('[getFile] API Key en header x-api-key:', req.headers['x-api-key'] ? req.headers['x-api-key'].substring(0, 10) + '...' : 'NINGUNA');
+    console.log('[getFile] ===============');
 
     // Sanitizar nombre de archivo para evitar path traversal
     const sanitizedFilename = path.basename(filename);
@@ -197,18 +203,15 @@ const getFile = async (req, res) => {
       });
     }
 
-    // Validar API Key (por header o query param)
-    const apiKey = req.headers['x-api-key'] || req.query.api_key;
-    if (apiKey !== process.env.ZAM_API_KEY) {
-      return res.status(401).json({ success: false, message: 'No autorizado' });
-    }
+    // NOTA: La validación de API Key ya se realiza en el middleware apiKeyAuth
+    // No es necesario validarla nuevamente aquí
 
     const downloadPath = ytDlpService.getDownloadPath();
     const filePath = path.join(downloadPath, sanitizedFilename);
 
     // Verificar que el archivo existe
     if (!fs.existsSync(filePath)) {
-      console.log('[audioDownloadController] Archivo no encontrado:', filePath);
+      console.log('[getFile] Archivo no encontrado:', filePath);
       return res.status(404).json({
         success: false,
         error: 'Archivo no encontrado'
@@ -224,7 +227,7 @@ const getFile = async (req, res) => {
       });
     }
 
-    console.log('[audioDownloadController] Enviando archivo:', filePath);
+    console.log('[getFile] Enviando archivo:', filePath);
 
     // Implementar HTTP Range Requests para streaming de audio
     const fileSize = stat.size;
@@ -267,7 +270,7 @@ const getFile = async (req, res) => {
       fs.createReadStream(filePath).pipe(res);
     }
   } catch (error) {
-    console.error('[audioDownloadController] Error al obtener archivo:', error.message);
+    console.error('[getFile] Error al obtener archivo:', error.message);
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
