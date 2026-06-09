@@ -208,6 +208,10 @@ const getFile = async (req, res) => {
     const fileSize = stat.size;
     const range = req.headers.range;
 
+    // Obtener headers pre-configurados (si existen)
+    const contentType = res.getHeader('Content-Type') || 'audio/mpeg';
+    const contentDisposition = res.getHeader('Content-Disposition');
+
     if (range) {
       // Parsear el rango solicitado
       const parts = range.replace(/bytes=/, "").split("-");
@@ -229,18 +233,26 @@ const getFile = async (req, res) => {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize,
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType,
       };
       
+      if (contentDisposition) {
+        head['Content-Disposition'] = contentDisposition;
+      }
+
       res.writeHead(206, head);
       file.pipe(res);
     } else {
       // Enviar archivo completo
       const head = {
         'Content-Length': fileSize,
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType,
       };
       
+      if (contentDisposition) {
+        head['Content-Disposition'] = contentDisposition;
+      }
+
       res.writeHead(200, head);
       fs.createReadStream(filePath).pipe(res);
     }

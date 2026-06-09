@@ -13,7 +13,7 @@ const path = require('path');
 // Endpoint de streaming con token temporal
 router.get('/stream/:filename', (req, res) => {
   const { filename } = req.params;
-  const { token } = req.query;
+  const { token, download } = req.query;
   
   if (!token) {
     return res.status(401).json({ 
@@ -38,6 +38,15 @@ router.get('/stream/:filename', (req, res) => {
     });
   }
   
+  // Si es descarga forzada, establecer headers diferentes
+  if (download === 'true') {
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+  } else {
+    // Streaming normal
+    res.setHeader('Content-Type', 'audio/mpeg');
+  }
+
   // Reutilizar la lógica de streaming del controlador
   req.params.filename = filename;
   audioDownloadController.getFile(req, res);
