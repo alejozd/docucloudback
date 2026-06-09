@@ -21,12 +21,6 @@ const apiKeyAuth = (req, res, next) => {
     });
   }
 
-  // LOGS PARA DEBUG
-  console.log('[apiKeyAuth] === DEBUG ===');
-  console.log('[apiKeyAuth] Headers disponibles:', Object.keys(req.headers).filter(h => h.includes('key') || h.includes('auth')));
-  console.log('[apiKeyAuth] Query params:', req.query);
-  console.log('[apiKeyAuth] ===============');
-
   // Buscar la API Key en múltiples fuentes (prioridad: header x-api-key > authorization > query param)
   const apiKeyFromHeader = req.headers['x-api-key'];
   const authHeader = req.headers['authorization'];
@@ -47,7 +41,7 @@ const apiKeyAuth = (req, res, next) => {
       providedApiKey = parts[1].trim();
       apiKeySource = 'authorization bearer header';
     } else {
-      console.log('[apiKeyAuth] Formato incorrecto del header Authorization');
+      console.warn('[apiKeyAuth] Acceso denegado: Formato de autorización incorrecto');
       return res.status(401).json({
         success: false,
         error: 'Formato de autorización incorrecto. Use: Authorization: Bearer <api-key>'
@@ -60,14 +54,9 @@ const apiKeyAuth = (req, res, next) => {
     apiKeySource = 'query parameter';
   }
 
-  // Log de depuración
-  console.log('[apiKeyAuth] API Key recibida:', providedApiKey ? providedApiKey.substring(0, 10) + '...' : 'NINGUNA');
-  console.log('[apiKeyAuth] API Key esperada:', expectedApiKey ? expectedApiKey.substring(0, 10) + '...' : 'NO CONFIGURADA');
-  console.log('[apiKeyAuth] Fuente de API Key:', apiKeySource);
-
   // Verificar que se proporcionó una API Key
   if (!providedApiKey) {
-    console.log('[apiKeyAuth] Acceso denegado: No se proporcionó API Key');
+    console.warn('[apiKeyAuth] Acceso denegado');
     return res.status(401).json({ 
       success: false, 
       message: 'No autorizado. API Key requerida. Usa header x-api-key, Authorization: Bearer, o query parameter ?api_key=xxx' 
@@ -76,14 +65,13 @@ const apiKeyAuth = (req, res, next) => {
 
   // Comparar la API Key proporcionada con la esperada
   if (providedApiKey !== expectedApiKey) {
-    console.log('[apiKeyAuth] Acceso denegado: API Key no coincide');
+    console.warn('[apiKeyAuth] Acceso denegado');
     return res.status(401).json({ 
       success: false, 
       message: 'No autorizado. API Key inválida' 
     });
   }
 
-  console.log('[apiKeyAuth] Acceso permitido');
   next();
 };
 

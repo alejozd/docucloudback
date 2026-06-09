@@ -13,14 +13,9 @@ const path = require('path');
 // Endpoint de streaming con token temporal
 router.get('/stream/:filename', (req, res) => {
   const { filename } = req.params;
-  const { token } = req.query;
-  
-  console.log('[stream] === DEBUG ===');
-  console.log('[stream] Filename:', filename);
-  console.log('[stream] Token recibido:', token ? token.substring(0, 15) + '...' : 'NINGUNO');
+  const { token, download } = req.query;
   
   if (!token) {
-    console.log('[stream] ❌ Token no proporcionado');
     return res.status(401).json({ 
       ok: false, 
       error: 'Token requerido' 
@@ -30,7 +25,6 @@ router.get('/stream/:filename', (req, res) => {
   const tokenData = tempTokenService.validateToken(token);
   
   if (!tokenData) {
-    console.log('[stream] ❌ Token inválido, expirado o no encontrado');
     return res.status(401).json({ 
       ok: false, 
       error: 'Token inválido, expirado o ya usado' 
@@ -38,17 +32,21 @@ router.get('/stream/:filename', (req, res) => {
   }
   
   if (tokenData.filename !== filename) {
-    console.log('[stream] ❌ Token no corresponde a este archivo');
-    console.log('[stream] Token filename:', tokenData.filename);
-    console.log('[stream] Request filename:', filename);
     return res.status(403).json({ 
       ok: false, 
       error: 'Token no corresponde a este archivo' 
     });
   }
   
-  console.log('[stream] ✅ Token válido, procediendo con streaming');
-  
+  // Si es descarga forzada, establecer headers diferentes
+  if (download === 'true') {
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+  } else {
+    // Streaming normal
+    res.setHeader('Content-Type', 'audio/mpeg');
+  }
+
   // Reutilizar la lógica de streaming del controlador
   req.params.filename = filename;
   audioDownloadController.getFile(req, res);
@@ -57,9 +55,6 @@ router.get('/stream/:filename', (req, res) => {
 // Endpoint para generar token temporal (PROTEGIDO con apiKeyAuth inline)
 router.post('/generate-token', apiKeyAuth, (req, res) => {
   const { filename } = req.body;
-  
-  console.log('[generate-token] === DEBUG ===');
-  console.log('[generate-token] Filename solicitado:', filename);
   
   if (!filename) {
     return res.status(400).json({ 
@@ -72,10 +67,7 @@ router.post('/generate-token', apiKeyAuth, (req, res) => {
   const DOWNLOAD_PATH = process.env.AUDIO_DOWNLOAD_PATH || path.join(__dirname, '../../downloads/audios');
   const filePath = path.join(DOWNLOAD_PATH, filename);
   
-  console.log('[generate-token] Buscando archivo en:', filePath);
-  
   if (!fs.existsSync(filePath)) {
-    console.log('[generate-token] ❌ Archivo no encontrado');
     return res.status(404).json({ 
       ok: false, 
       error: 'Archivo no encontrado' 
@@ -85,14 +77,24 @@ router.post('/generate-token', apiKeyAuth, (req, res) => {
   const token = tempTokenService.generateToken(filename, 30);
   const streamUrl = `${req.protocol}://${req.get('host')}/api/audio-download/stream/${encodeURIComponent(filename)}?token=${token}`;
   
-  console.log('[generate-token] ✅ Token generado');
-  console.log('[generate-token] Stream URL:', streamUrl);
-  
   res.json({
     ok: true,
     token: token,
     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     streamUrl: streamUrl
+  });
+});
+
+// Endpoint de prueba para verificar que el servidor responde
+router.get('/test', (req, res) => {
+  res.json({
+    ok: true,
+    message: 'Servidor funcionando correctamente',
+    timestamp: new Date().toISOString(),
+    routes: {
+      public: ['/stream/:filename', '/generate-token', '/test'],
+      protected: ['/download', '/status/:filename', '/files', '/download/:filename', '/delete/:filename']
+    }
   });
 });
 

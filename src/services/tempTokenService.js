@@ -12,7 +12,6 @@ setInterval(() => {
       tempTokens.delete(token);
     }
   }
-  console.log(`[tempTokenService] Tokens activos: ${tempTokens.size}`);
 }, 10 * 60 * 1000);
 
 /**
@@ -32,8 +31,6 @@ function generateToken(filename, durationMinutes = 30) {
     used: false
   });
   
-  console.log(`[tempTokenService] Token generado para: ${filename}, expira en ${durationMinutes}min`);
-  
   return token;
 }
 
@@ -46,18 +43,15 @@ function validateToken(token) {
   const data = tempTokens.get(token);
   
   if (!data) {
-    console.log(`[tempTokenService] Token no encontrado: ${token?.substring(0, 10)}...`);
     return null;
   }
   
   if (data.expiresAt < Date.now()) {
-    console.log(`[tempTokenService] Token expirado: ${token.substring(0, 10)}...`);
     tempTokens.delete(token);
     return null;
   }
   
   if (data.used) {
-    console.log(`[tempTokenService] Token ya usado: ${token.substring(0, 10)}...`);
     return null;
   }
   
@@ -65,7 +59,6 @@ function validateToken(token) {
   // En su lugar, permitimos múltiples usos dentro de la ventana de tiempo
   // data.used = true;
   
-  console.log(`[tempTokenService] Token válido para: ${data.filename}`);
   return data;
 }
 
@@ -74,7 +67,6 @@ function validateToken(token) {
  */
 function clearAllTokens() {
   tempTokens.clear();
-  console.log('[tempTokenService] Todos los tokens eliminados');
 }
 
 module.exports = {

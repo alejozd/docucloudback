@@ -33,19 +33,15 @@ const downloadAudio = async (req, res) => {
       });
     }
 
-    // Iniciar descarga en segundo plano (AHORA ES ASÍNCRONO - esperamos los metadatos)
-    console.log('[audioDownloadController] Iniciando descarga en segundo plano...');
+    // Iniciar descarga en segundo plano
     const taskInfo = await ytDlpService.startBackgroundDownload(url);
-
-    console.log('[audioDownloadController] Descarga iniciada, archivo esperado:', taskInfo.filename);
-    console.log('[audioDownloadController] Título del video:', taskInfo.title);
 
     // Retornar respuesta inmediata con código 202 Accepted
     return res.status(202).json({
       success: true,
       message: 'Descarga iniciada en segundo plano',
       filename: taskInfo.filename,
-      title: taskInfo.title,  // NUEVO: título original del video
+      title: taskInfo.title,
       status: 'downloading',
       statusUrl: `/api/audio-download/status/${encodeURIComponent(taskInfo.filename)}`,
       downloadUrl: `/api/audio-download/download/${encodeURIComponent(taskInfo.filename)}`
@@ -77,8 +73,6 @@ const getDownloadStatus = async (req, res) => {
   try {
     const { filename } = req.params;
     
-    console.log('[audioDownloadController] Verificando estado de:', filename);
-
     // Sanitizar nombre de archivo para evitar path traversal
     const sanitizedFilename = path.basename(filename);
     
@@ -92,8 +86,6 @@ const getDownloadStatus = async (req, res) => {
 
     // Obtener estado desde el servicio
     const statusInfo = ytDlpService.getDownloadStatus(sanitizedFilename);
-
-    console.log('[audioDownloadController] Estado obtenido:', statusInfo.status);
 
     return res.status(200).json({
       success: true,
@@ -117,11 +109,8 @@ const listFiles = async (req, res) => {
   try {
     const downloadPath = ytDlpService.getDownloadPath();
     
-    console.log('[audioDownloadController] Listando archivos en:', downloadPath);
-
     // Verificar si el directorio existe
     if (!fs.existsSync(downloadPath)) {
-      console.log('[audioDownloadController] Directorio no existe, creando...');
       ytDlpService.ensureDownloadDirectory();
       return res.status(200).json({
         success: true,
@@ -148,7 +137,7 @@ const listFiles = async (req, res) => {
         
         return {
           name: file,
-          title: title,  // NUEVO: título legible extraído del nombre de archivo
+          title: title,
           videoId: videoId,
           size: stats.size,
           sizeFormatted: formatFileSize(stats.size),
@@ -157,7 +146,7 @@ const listFiles = async (req, res) => {
           downloadUrl: `/api/audio-download/download/${encodeURIComponent(file)}`
         };
       })
-      .sort((a, b) => b.modifiedAt - a.modifiedAt); // Ordenar por más reciente primero
+      .sort((a, b) => b.modifiedAt - a.modifiedAt);
 
     console.log(`[audioDownloadController] ${files.length} archivos encontrados`);
 
@@ -184,14 +173,6 @@ const getFile = async (req, res) => {
   try {
     const { filename } = req.params;
     
-    console.log('[getFile] === DEBUG ===');
-    console.log('[getFile] Filename solicitado:', filename);
-    console.log('[getFile] Query params:', req.query);
-    console.log('[getFile] Headers:', req.headers);
-    console.log('[getFile] API Key en query:', req.query.api_key ? req.query.api_key.substring(0, 10) + '...' : 'NINGUNA');
-    console.log('[getFile] API Key en header x-api-key:', req.headers['x-api-key'] ? req.headers['x-api-key'].substring(0, 10) + '...' : 'NINGUNA');
-    console.log('[getFile] ===============');
-
     // Sanitizar nombre de archivo para evitar path traversal
     const sanitizedFilename = path.basename(filename);
     
@@ -203,15 +184,11 @@ const getFile = async (req, res) => {
       });
     }
 
-    // NOTA: La validación de API Key ya se realiza en el middleware apiKeyAuth
-    // No es necesario validarla nuevamente aquí
-
     const downloadPath = ytDlpService.getDownloadPath();
     const filePath = path.join(downloadPath, sanitizedFilename);
 
     // Verificar que el archivo existe
     if (!fs.existsSync(filePath)) {
-      console.log('[getFile] Archivo no encontrado:', filePath);
       return res.status(404).json({
         success: false,
         error: 'Archivo no encontrado'
@@ -227,11 +204,13 @@ const getFile = async (req, res) => {
       });
     }
 
-    console.log('[getFile] Enviando archivo:', filePath);
-
     // Implementar HTTP Range Requests para streaming de audio
     const fileSize = stat.size;
     const range = req.headers.range;
+
+    // Obtener headers pre-configurados (si existen)
+    const contentType = res.getHeader('Content-Type') || 'audio/mpeg';
+    const contentDisposition = res.getHeader('Content-Disposition');
 
     if (range) {
       // Parsear el rango solicitado
@@ -254,21 +233,31 @@ const getFile = async (req, res) => {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize,
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType,
       };
       
+      if (contentDisposition) {
+        head['Content-Disposition'] = contentDisposition;
+      }
+
       res.writeHead(206, head);
       file.pipe(res);
     } else {
       // Enviar archivo completo
       const head = {
         'Content-Length': fileSize,
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType,
       };
       
+      if (contentDisposition) {
+        head['Content-Disposition'] = contentDisposition;
+      }
+
       res.writeHead(200, head);
       fs.createReadStream(filePath).pipe(res);
     }
+
+    console.log('[audioDownloadController] Descarga exitosa:', sanitizedFilename);
   } catch (error) {
     console.error('[getFile] Error al obtener archivo:', error.message);
     if (!res.headersSent) {
@@ -289,8 +278,6 @@ const deleteFile = async (req, res) => {
   try {
     const { filename } = req.params;
     
-    console.log('[audioDownloadController] Solicitud de eliminación:', filename);
-
     // Sanitizar nombre de archivo para evitar path traversal
     const sanitizedFilename = path.basename(filename);
     
@@ -307,7 +294,6 @@ const deleteFile = async (req, res) => {
 
     // Verificar que el archivo existe
     if (!fs.existsSync(filePath)) {
-      console.log('[audioDownloadController] Archivo no encontrado para eliminar:', filePath);
       return res.status(404).json({
         success: false,
         error: 'Archivo no encontrado'
@@ -316,7 +302,6 @@ const deleteFile = async (req, res) => {
 
     // Eliminar archivo
     fs.unlinkSync(filePath);
-    console.log('[audioDownloadController] Archivo eliminado:', filePath);
 
     return res.status(200).json({
       success: true,
