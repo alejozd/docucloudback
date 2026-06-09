@@ -49,21 +49,25 @@ function sanitizeFilename(filename) {
 }
 
 /**
+ * Extrae el ID del video de una URL de YouTube
+ * @param {string} url - URL del video de YouTube
+ * @returns {string|null} - ID del video o null si no se pudo extraer
+ */
+function extractVideoId(url) {
+  const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
+
+/**
  * Genera un nombre de archivo seguro basado en la URL
  * @param {string} url - URL del video
  * @returns {string} - Nombre de archivo generado
  */
 function generateFilenameFromUrl(url) {
   try {
-    // Extraer ID del video de YouTube
-    let videoId = '';
-    const urlObj = new URL(url);
-    
-    if (urlObj.hostname.includes('youtu.be')) {
-      videoId = urlObj.pathname.slice(1);
-    } else if (urlObj.hostname.includes('youtube.com')) {
-      videoId = urlObj.searchParams.get('v') || '';
-    }
+    // Extraer ID del video de YouTube usando la función extractVideoId
+    const videoId = extractVideoId(url);
     
     if (videoId) {
       return `video_${videoId}.mp3`;
@@ -206,8 +210,9 @@ function startBackgroundDownload(url) {
   // Asegurar que el directorio existe
   ensureDownloadDirectory();
 
-  // Generar nombre de archivo esperado
-  const expectedFilename = generateFilenameFromUrl(url);
+  // Extraer ID del video y generar nombre de archivo predecible
+  const videoId = extractVideoId(url);
+  const expectedFilename = videoId ? `video_${videoId}.mp3` : generateFilenameFromUrl(url);
   const expectedPath = path.join(DOWNLOAD_PATH, expectedFilename);
 
   // Registrar estado inicial
@@ -218,8 +223,8 @@ function startBackgroundDownload(url) {
     progress: 0
   });
 
-  // Template de salida - yt-dlp decidirá el nombre final
-  const outputTemplate = path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s');
+  // Template de salida forzado con el ID del video para nombre predecible
+  const outputTemplate = path.join(DOWNLOAD_PATH, `video_${videoId || '%(id)s'}.%(ext)s`);
 
   // Argumentos de yt-dlp
   const args = [
@@ -232,6 +237,7 @@ function startBackgroundDownload(url) {
 
   console.log(`[ytDlpService] Iniciando descarga en segundo plano: ${url}`);
   console.log(`[ytDlpService] Archivo esperado: ${expectedFilename}`);
+  console.log(`[ytDlpService] Template de salida: ${outputTemplate}`);
 
   // Ejecutar yt-dlp usando spawn (NO esperamos el resultado)
   const ytDlpProcess = spawn('yt-dlp', args);
@@ -265,46 +271,74 @@ function startBackgroundDownload(url) {
     if (code === 0) {
       console.log(`[ytDlpService] [BG] Descarga completada con código: ${code}`);
       
-      // Buscar el archivo MP3 más reciente para obtener el nombre real
-      try {
-        const files = fs.readdirSync(DOWNLOAD_PATH)
-          .filter(file => file.endsWith('.mp3'))
-          .map(file => ({
-            name: file,
-            path: path.join(DOWNLOAD_PATH, file),
-            stats: fs.statSync(path.join(DOWNLOAD_PATH, file))
-          }))
-          .sort((a, b) => b.stats.mtime - a.stats.mtime);
-
-        if (files.length > 0) {
-          const actualFile = files[0];
-          console.log(`[ytDlpService] [BG] Archivo generado: ${actualFile.name}`);
+      // Verificar si el archivo con nombre predecible existe
+      const predictedFilePath = path.join(DOWNLOAD_PATH, expectedFilename);
+      
+      if (fs.existsSync(predictedFilePath)) {
+        try {
+          const stats = fs.statSync(predictedFilePath);
+          console.log(`[ytDlpService] [BG] Archivo generado: ${expectedFilename}`);
           
-          // Actualizar estado con el nombre real del archivo
-          downloadStatus.set(actualFile.name, {
+          // Actualizar estado con el nombre predecible del archivo
+          downloadStatus.set(expectedFilename, {
             status: 'completed',
             url: url,
             startedAt: currentStatus?.startedAt || new Date().toISOString(),
             completedAt: new Date().toISOString(),
             progress: 100,
-            filename: actualFile.name,
-            size: actualFile.stats.size
+            filename: expectedFilename,
+            size: stats.size
           });
-          
-          // Si el nombre es diferente al esperado, también actualizar esa entrada
-          if (actualFile.name !== expectedFilename && currentStatus) {
-            currentStatus.status = 'completed';
-            currentStatus.completedAt = new Date().toISOString();
-            currentStatus.actualFilename = actualFile.name;
+        } catch (err) {
+          console.error('[ytDlpService] [BG] Error al leer archivo:', err.message);
+          if (currentStatus) {
+            currentStatus.status = 'failed';
+            currentStatus.error = 'Error al leer información del archivo';
             downloadStatus.set(expectedFilename, currentStatus);
           }
         }
-      } catch (err) {
-        console.error('[ytDlpService] [BG] Error al buscar archivo:', err.message);
-        if (currentStatus) {
-          currentStatus.status = 'failed';
-          currentStatus.error = 'Archivo no encontrado después de la descarga';
-          downloadStatus.set(expectedFilename, currentStatus);
+      } else {
+        // Fallback: buscar el archivo MP3 más reciente por si acaso
+        try {
+          const files = fs.readdirSync(DOWNLOAD_PATH)
+            .filter(file => file.endsWith('.mp3'))
+            .map(file => ({
+              name: file,
+              path: path.join(DOWNLOAD_PATH, file),
+              stats: fs.statSync(path.join(DOWNLOAD_PATH, file))
+            }))
+            .sort((a, b) => b.stats.mtime - a.stats.mtime);
+
+          if (files.length > 0) {
+            const actualFile = files[0];
+            console.log(`[ytDlpService] [BG] Archivo alternativo encontrado: ${actualFile.name}`);
+            
+            // Actualizar estado con el nombre real del archivo
+            downloadStatus.set(actualFile.name, {
+              status: 'completed',
+              url: url,
+              startedAt: currentStatus?.startedAt || new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              progress: 100,
+              filename: actualFile.name,
+              size: actualFile.stats.size
+            });
+            
+            // Si el nombre es diferente al esperado, también actualizar esa entrada
+            if (actualFile.name !== expectedFilename && currentStatus) {
+              currentStatus.status = 'completed';
+              currentStatus.completedAt = new Date().toISOString();
+              currentStatus.actualFilename = actualFile.name;
+              downloadStatus.set(expectedFilename, currentStatus);
+            }
+          }
+        } catch (err) {
+          console.error('[ytDlpService] [BG] Error al buscar archivo:', err.message);
+          if (currentStatus) {
+            currentStatus.status = 'failed';
+            currentStatus.error = 'Archivo no encontrado después de la descarga';
+            downloadStatus.set(expectedFilename, currentStatus);
+          }
         }
       }
     } else {
@@ -360,8 +394,8 @@ function getDownloadStatus(filename) {
     };
   }
   
-  // Si no está en el mapa, verificar si el archivo existe
-  const filePath = path.join(DOWNLOAD_PATH, filename);
+  // Si no está en el mapa, verificar si el archivo existe con el nombre solicitado
+  let filePath = path.join(DOWNLOAD_PATH, filename);
   
   if (fs.existsSync(filePath)) {
     try {
@@ -379,6 +413,31 @@ function getDownloadStatus(filename) {
         filename: filename,
         error: 'Error al leer información del archivo'
       };
+    }
+  }
+  
+  // Si el archivo no existe con ese nombre, intentar extraer el ID del video
+  // y buscar con el formato predecible video_<ID>.mp3
+  const videoIdMatch = filename.match(/video_(.*)\.mp3$/);
+  if (videoIdMatch && videoIdMatch[1]) {
+    const predictedPath = path.join(DOWNLOAD_PATH, `video_${videoIdMatch[1]}.mp3`);
+    if (fs.existsSync(predictedPath)) {
+      try {
+        const stats = fs.statSync(predictedPath);
+        return {
+          status: 'completed',
+          filename: `video_${videoIdMatch[1]}.mp3`,
+          size: stats.size,
+          sizeFormatted: formatFileSize(stats.size),
+          modifiedAt: stats.mtime.toISOString()
+        };
+      } catch (err) {
+        return {
+          status: 'failed',
+          filename: filename,
+          error: 'Error al leer información del archivo'
+        };
+      }
     }
   }
   
@@ -411,6 +470,7 @@ module.exports = {
   isValidYouTubeUrl,
   sanitizeFilename,
   generateFilenameFromUrl,
+  extractVideoId,
   getDownloadPath: () => DOWNLOAD_PATH,
   ensureDownloadDirectory
 };
