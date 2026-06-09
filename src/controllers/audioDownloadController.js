@@ -33,17 +33,19 @@ const downloadAudio = async (req, res) => {
       });
     }
 
-    // Iniciar descarga en segundo plano (NO esperamos a que termine)
+    // Iniciar descarga en segundo plano (AHORA ES ASÍNCRONO - esperamos los metadatos)
     console.log('[audioDownloadController] Iniciando descarga en segundo plano...');
-    const taskInfo = ytDlpService.startBackgroundDownload(url);
+    const taskInfo = await ytDlpService.startBackgroundDownload(url);
 
     console.log('[audioDownloadController] Descarga iniciada, archivo esperado:', taskInfo.filename);
+    console.log('[audioDownloadController] Título del video:', taskInfo.title);
 
     // Retornar respuesta inmediata con código 202 Accepted
     return res.status(202).json({
       success: true,
       message: 'Descarga iniciada en segundo plano',
       filename: taskInfo.filename,
+      title: taskInfo.title,  // NUEVO: título original del video
       status: 'downloading',
       statusUrl: `/api/audio-download/status/${encodeURIComponent(taskInfo.filename)}`,
       downloadUrl: `/api/audio-download/download/${encodeURIComponent(taskInfo.filename)}`
@@ -135,8 +137,19 @@ const listFiles = async (req, res) => {
         const filePath = path.join(downloadPath, file);
         const stats = fs.statSync(filePath);
         
+        // Extraer ID del filename (última parte antes de .mp3)
+        const match = file.match(/_([a-zA-Z0-9_-]{11})\.mp3$/);
+        const videoId = match ? match[1] : null;
+        
+        // El título es todo lo anterior al ID
+        const title = videoId 
+          ? file.replace(`_${videoId}.mp3`, '').replace(/_/g, ' ')
+          : file.replace('.mp3', '').replace(/_/g, ' ');
+        
         return {
           name: file,
+          title: title,  // NUEVO: título legible extraído del nombre de archivo
+          videoId: videoId,
           size: stats.size,
           sizeFormatted: formatFileSize(stats.size),
           createdAt: stats.birthtime,
