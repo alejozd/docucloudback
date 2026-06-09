@@ -184,6 +184,12 @@ const getFile = async (req, res) => {
       });
     }
 
+    // Validar API Key (por header o query param)
+    const apiKey = req.headers['x-api-key'] || req.query.api_key;
+    if (apiKey !== process.env.ZAM_API_KEY) {
+      return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+
     const downloadPath = ytDlpService.getDownloadPath();
     const filePath = path.join(downloadPath, sanitizedFilename);
 
@@ -197,8 +203,8 @@ const getFile = async (req, res) => {
     }
 
     // Verificar que es un archivo (no directorio)
-    const stats = fs.statSync(filePath);
-    if (!stats.isFile()) {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
       return res.status(400).json({
         success: false,
         error: 'El recurso especificado no es un archivo válido'
@@ -207,19 +213,46 @@ const getFile = async (req, res) => {
 
     console.log('[audioDownloadController] Enviando archivo:', filePath);
 
-    // Enviar archivo para descarga
-    res.download(filePath, sanitizedFilename, (err) => {
-      if (err) {
-        console.error('[audioDownloadController] Error al enviar archivo:', err.message);
-        // Si ya se enviaron headers, no podemos enviar JSON
-        if (!res.headersSent) {
-          return res.status(500).json({
-            success: false,
-            error: 'Error al descargar el archivo'
-          });
-        }
+    // Implementar HTTP Range Requests para streaming de audio
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // Parsear el rango solicitado
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      
+      // Validar rango
+      if (start >= fileSize || end >= fileSize || start > end) {
+        return res.status(416).json({
+          success: false,
+          error: 'Rango no válido'
+        });
       }
-    });
+      
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(filePath, { start, end });
+      
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'audio/mpeg',
+      };
+      
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // Enviar archivo completo
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'audio/mpeg',
+      };
+      
+      res.writeHead(200, head);
+      fs.createReadStream(filePath).pipe(res);
+    }
   } catch (error) {
     console.error('[audioDownloadController] Error al obtener archivo:', error.message);
     if (!res.headersSent) {
