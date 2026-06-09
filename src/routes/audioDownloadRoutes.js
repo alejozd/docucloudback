@@ -6,6 +6,10 @@ const tempTokenService = require('../services/tempTokenService');
 const fs = require('fs');
 const path = require('path');
 
+console.log('========================================');
+console.log('[audioDownloadRoutes] INICIALIZANDO RUTAS');
+console.log('========================================');
+
 // ============================================================
 // RUTAS PÚBLICAS (SIN apiKeyAuth) - Deben ir PRIMERO
 // ============================================================
@@ -96,6 +100,20 @@ router.post('/generate-token', apiKeyAuth, (req, res) => {
   });
 });
 
+// Endpoint de prueba para verificar que el servidor responde
+router.get('/test', (req, res) => {
+  console.log('[test] 🎯 PETICIÓN A /test RECIBIDA');
+  res.json({
+    ok: true,
+    message: 'Servidor funcionando correctamente',
+    timestamp: new Date().toISOString(),
+    routes: {
+      public: ['/stream/:filename', '/generate-token', '/test'],
+      protected: ['/download', '/status/:filename', '/files', '/download/:filename', '/delete/:filename']
+    }
+  });
+});
+
 // ============================================================
 // APLICAR MIDDLEWARE apiKeyAuth A TODAS LAS DEMÁS RUTAS
 // ============================================================
@@ -110,5 +128,17 @@ router.get('/status/:filename', audioDownloadController.getDownloadStatus);
 router.get('/files', audioDownloadController.listFiles);
 router.get('/download/:filename', audioDownloadController.getFile);
 router.delete('/delete/:filename', audioDownloadController.deleteFile);
+
+console.log('========================================');
+console.log('[audioDownloadRoutes] RUTAS REGISTRADAS:');
+console.log('  1. GET /stream/:filename (PÚBLICA)');
+console.log('  2. POST /generate-token (PROTEGIDA)');
+console.log('  3. router.use(apiKeyAuth) ← Middleware aplicado aquí');
+console.log('  4. POST /download');
+console.log('  5. GET /status/:filename');
+console.log('  6. GET /files');
+console.log('  7. GET /download/:filename');
+console.log('  8. DELETE /delete/:filename');
+console.log('========================================');
 
 module.exports = router;
