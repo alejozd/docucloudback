@@ -14,7 +14,6 @@ const downloadStatus = new Map();
 function ensureDownloadDirectory() {
   if (!fs.existsSync(DOWNLOAD_PATH)) {
     fs.mkdirSync(DOWNLOAD_PATH, { recursive: true });
-    console.log(`[ytDlpService] Carpeta de descargas creada: ${DOWNLOAD_PATH}`);
   }
 }
 
@@ -154,9 +153,6 @@ function downloadAudio(url) {
       url                         // URL del video
     ];
 
-    console.log(`[ytDlpService] Iniciando descarga de audio: ${url}`);
-    console.log(`[ytDlpService] Ruta de destino: ${DOWNLOAD_PATH}`);
-
     // Ejecutar yt-dlp usando spawn para mejor manejo de procesos largos
     const ytDlpProcess = spawn('yt-dlp', args);
 
@@ -164,21 +160,16 @@ function downloadAudio(url) {
     let stderrData = '';
 
     ytDlpProcess.stdout.on('data', (data) => {
-      const chunk = data.toString();
-      stdoutData += chunk;
-      console.log(`[ytDlpService] STDOUT: ${chunk.trim()}`);
+      stdoutData += data.toString();
     });
 
     ytDlpProcess.stderr.on('data', (data) => {
-      const chunk = data.toString();
-      stderrData += chunk;
-      console.log(`[ytDlpService] STDERR: ${chunk.trim()}`);
+      stderrData += data.toString();
     });
 
     ytDlpProcess.on('close', (code) => {
       if (code === 0) {
         // Descarga exitosa - buscar el archivo generado
-        console.log(`[ytDlpService] Descarga completada con código: ${code}`);
         
         // Buscar el archivo MP3 más reciente en la carpeta
         try {
@@ -193,7 +184,6 @@ function downloadAudio(url) {
 
           if (files.length > 0) {
             const latestFile = files[0];
-            console.log(`[ytDlpService] Archivo generado: ${latestFile.name}`);
             resolve({
               success: true,
               filename: latestFile.name,
@@ -265,7 +255,6 @@ async function startBackgroundDownload(url) {
   try {
     metadata = await getVideoMetadata(url);
   } catch (error) {
-    console.warn('[ytDlpService] No se pudo obtener metadatos, usando fallback:', error.message);
     metadata = {
       title: `video_${videoId}`,
       duration: 0,
@@ -282,7 +271,7 @@ async function startBackgroundDownload(url) {
   downloadStatus.set(expectedFilename, {
     id: videoId,
     url: url,
-    title: metadata.title,  // Guardar título original
+    title: metadata.title,
     filename: expectedFilename,
     status: 'downloading',
     progress: 0,
@@ -302,11 +291,7 @@ async function startBackgroundDownload(url) {
     url                         // URL del video
   ];
 
-  console.log(`[ytDlpService] Iniciando descarga en segundo plano: ${url}`);
-  console.log(`[ytDlpService] Título original: ${metadata.title}`);
-  console.log(`[ytDlpService] Título sanitizado: ${sanitizedTitle}`);
-  console.log(`[ytDlpService] Archivo esperado: ${expectedFilename}`);
-  console.log(`[ytDlpService] Template de salida: ${outputTemplate}`);
+  console.log(`[ytDlpService] Descarga iniciada: ID=${videoId}, URL=${url}`);
 
   // Ejecutar yt-dlp usando spawn (NO esperamos el resultado)
   const ytDlpProcess = spawn('yt-dlp', args);
@@ -315,7 +300,6 @@ async function startBackgroundDownload(url) {
 
   ytDlpProcess.stdout.on('data', (data) => {
     const chunk = data.toString();
-    console.log(`[ytDlpService] [BG] STDOUT: ${chunk.trim()}`);
     
     // Intentar extraer progreso del output
     const progressMatch = chunk.match(/\[download\]\s+(\d+\.?\d*)%/);
@@ -329,24 +313,20 @@ async function startBackgroundDownload(url) {
   });
 
   ytDlpProcess.stderr.on('data', (data) => {
-    const chunk = data.toString();
-    stderrData += chunk;
-    console.log(`[ytDlpService] [BG] STDERR: ${chunk.trim()}`);
+    stderrData += data.toString();
   });
 
   ytDlpProcess.on('close', (code) => {
     const currentStatus = downloadStatus.get(expectedFilename);
     
     if (code === 0) {
-      console.log(`[ytDlpService] [BG] Descarga completada con código: ${code}`);
-      
       // Verificar si el archivo con nombre predecible existe
       const predictedFilePath = path.join(DOWNLOAD_PATH, expectedFilename);
       
       if (fs.existsSync(predictedFilePath)) {
         try {
           const stats = fs.statSync(predictedFilePath);
-          console.log(`[ytDlpService] [BG] Archivo generado: ${expectedFilename}`);
+          console.log(`[ytDlpService] Descarga completada: ${expectedFilename}`);
           
           // Actualizar estado con el nombre predecible del archivo
           downloadStatus.set(expectedFilename, {
@@ -380,7 +360,7 @@ async function startBackgroundDownload(url) {
 
           if (files.length > 0) {
             const actualFile = files[0];
-            console.log(`[ytDlpService] [BG] Archivo alternativo encontrado: ${actualFile.name}`);
+            console.log(`[ytDlpService] Descarga completada: ${actualFile.name}`);
             
             // Actualizar estado con el nombre real del archivo
             downloadStatus.set(actualFile.name, {
@@ -412,7 +392,7 @@ async function startBackgroundDownload(url) {
       }
     } else {
       // Error en la descarga
-      console.error(`[ytDlpService] [BG] Error en yt-dlp, código de salida: ${code}`);
+      console.error(`[ytDlpService] Error en descarga: código de salida: ${code}`);
       if (currentStatus) {
         currentStatus.status = 'failed';
         currentStatus.error = stderrData || 'Código de error desconocido';
@@ -422,7 +402,7 @@ async function startBackgroundDownload(url) {
   });
 
   ytDlpProcess.on('error', (err) => {
-    console.error('[ytDlpService] [BG] Error al ejecutar yt-dlp:', err.message);
+    console.error('[ytDlpService] Error en descarga:', err.message);
     const currentStatus = downloadStatus.get(expectedFilename);
     if (currentStatus) {
       currentStatus.status = 'failed';
@@ -432,9 +412,6 @@ async function startBackgroundDownload(url) {
       downloadStatus.set(expectedFilename, currentStatus);
     }
   });
-
-  // SIN TIMEOUT - La descarga puede tardar horas si es necesario
-  // El proceso continuará hasta que termine naturalmente o falle por error real
 
   return {
     filename: expectedFilename,
@@ -461,7 +438,7 @@ function getDownloadStatus(filename) {
       startedAt: statusInfo.startedAt,
       completedAt: statusInfo.completedAt,
       error: statusInfo.error,
-      title: statusInfo.title  // Incluir título original si está disponible
+      title: statusInfo.title
     };
   }
   
@@ -482,7 +459,7 @@ function getDownloadStatus(filename) {
       return {
         status: 'completed',
         filename: filename,
-        title: title,  // Título extraído del nombre de archivo
+        title: title,
         size: stats.size,
         sizeFormatted: formatFileSize(stats.size),
         modifiedAt: stats.mtime.toISOString()
@@ -507,7 +484,7 @@ function getDownloadStatus(filename) {
         return {
           status: 'completed',
           filename: `video_${videoIdMatch[1]}.mp3`,
-          title: `video_${videoIdMatch[1]}`,  // Título fallback para formato legacy
+          title: `video_${videoIdMatch[1]}`,
           size: stats.size,
           sizeFormatted: formatFileSize(stats.size),
           modifiedAt: stats.mtime.toISOString()
