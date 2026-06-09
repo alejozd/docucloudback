@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -32,11 +32,55 @@ function isValidYouTubeUrl(url) {
 }
 
 /**
+ * Obtiene metadatos del video (título, duración, thumbnail) sin descargarlo
+ * @param {string} url - URL del video de YouTube
+ * @returns {Promise<{title: string, duration: number, thumbnail: string|null}>}
+ */
+async function getVideoMetadata(url) {
+  return new Promise((resolve, reject) => {
+    const command = `yt-dlp --print title --print duration --print thumbnail --no-download "${url}"`;
+    
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`Error obteniendo metadatos: ${stderr}`));
+        return;
+      }
+      
+      const lines = stdout.trim().split('\n');
+      resolve({
+        title: lines[0] || 'Video sin título',
+        duration: parseInt(lines[1]) || 0,
+        thumbnail: lines[2] || null
+      });
+    });
+  });
+}
+
+/**
  * Sanitiza el nombre de archivo para evitar inyección de comandos
+ * @param {string} title - Título original del video
+ * @returns {string} - Nombre sanitizado
+ */
+function sanitizeFilename(title) {
+  if (!title) return 'unknown_audio';
+  
+  // Eliminar caracteres no permitidos en nombres de archivo
+  let sanitized = title
+    .replace(/[<>:"/\\|?*]/g, '')  // Eliminar caracteres especiales peligrosos
+    .replace(/\s+/g, '_')           // Reemplazar espacios con guiones bajos
+    .replace(/[^\w\-_.]/g, '')      // Solo caracteres alfanuméricos, guiones, puntos y guiones bajos
+    .substring(0, 100)              // Limitar a 100 caracteres
+    .trim();
+  
+  return sanitized || 'unknown_audio';
+}
+
+/**
+ * Sanitiza el nombre de archivo para evitar inyección de comandos (versión legacy)
  * @param {string} filename - Nombre original del archivo
  * @returns {string} - Nombre sanitizado
  */
-function sanitizeFilename(filename) {
+function sanitizeFilenameLegacy(filename) {
   if (!filename) return 'unknown_audio';
   
   // Eliminar caracteres peligrosos y limitar longitud
@@ -199,9 +243,9 @@ function downloadAudio(url) {
 /**
  * Inicia una descarga de audio en segundo plano (sin esperar)
  * @param {string} url - URL del video de YouTube
- * @returns {{filename: string, expectedPath: string}} - Información de la tarea iniciada
+ * @returns {Promise<{filename: string, expectedPath: string, title: string}>} - Información de la tarea iniciada
  */
-function startBackgroundDownload(url) {
+async function startBackgroundDownload(url) {
   // Validar URL primero
   if (!isValidYouTubeUrl(url)) {
     throw new Error('URL inválida. Debe ser una URL de YouTube (youtube.com o youtu.be)');
@@ -210,21 +254,44 @@ function startBackgroundDownload(url) {
   // Asegurar que el directorio existe
   ensureDownloadDirectory();
 
-  // Extraer ID del video y generar nombre de archivo predecible
+  // Extraer ID del video
   const videoId = extractVideoId(url);
-  const expectedFilename = videoId ? `video_${videoId}.mp3` : generateFilenameFromUrl(url);
+  if (!videoId) {
+    throw new Error('No se pudo extraer el ID del video');
+  }
+  
+  // Obtener metadatos del video
+  let metadata;
+  try {
+    metadata = await getVideoMetadata(url);
+  } catch (error) {
+    console.warn('[ytDlpService] No se pudo obtener metadatos, usando fallback:', error.message);
+    metadata = {
+      title: `video_${videoId}`,
+      duration: 0,
+      thumbnail: null
+    };
+  }
+  
+  // Generar nombre de archivo con título sanitizado + ID
+  const sanitizedTitle = sanitizeFilename(metadata.title);
+  const expectedFilename = `${sanitizedTitle}_${videoId}.mp3`;
   const expectedPath = path.join(DOWNLOAD_PATH, expectedFilename);
 
-  // Registrar estado inicial
+  // Registrar estado inicial con título original
   downloadStatus.set(expectedFilename, {
-    status: 'downloading',
+    id: videoId,
     url: url,
-    startedAt: new Date().toISOString(),
-    progress: 0
+    title: metadata.title,  // Guardar título original
+    filename: expectedFilename,
+    status: 'downloading',
+    progress: 0,
+    error: null,
+    createdAt: new Date()
   });
 
-  // Template de salida forzado con el ID del video para nombre predecible
-  const outputTemplate = path.join(DOWNLOAD_PATH, `video_${videoId || '%(id)s'}.%(ext)s`);
+  // Template de salida con título sanitizado + ID para nombre predecible
+  const outputTemplate = path.join(DOWNLOAD_PATH, `${sanitizedTitle}_${videoId}.%(ext)s`);
 
   // Argumentos de yt-dlp
   const args = [
@@ -236,6 +303,8 @@ function startBackgroundDownload(url) {
   ];
 
   console.log(`[ytDlpService] Iniciando descarga en segundo plano: ${url}`);
+  console.log(`[ytDlpService] Título original: ${metadata.title}`);
+  console.log(`[ytDlpService] Título sanitizado: ${sanitizedTitle}`);
   console.log(`[ytDlpService] Archivo esperado: ${expectedFilename}`);
   console.log(`[ytDlpService] Template de salida: ${outputTemplate}`);
 
@@ -369,14 +438,15 @@ function startBackgroundDownload(url) {
 
   return {
     filename: expectedFilename,
-    expectedPath: expectedPath
+    expectedPath: expectedPath,
+    title: metadata.title
   };
 }
 
 /**
  * Obtiene el estado de una descarga
  * @param {string} filename - Nombre del archivo a verificar
- * @returns {{status: string, filename: string, size?: number, error?: string}}
+ * @returns {{status: string, filename: string, size?: number, error?: string, title?: string}}
  */
 function getDownloadStatus(filename) {
   // Verificar en el mapa de estados primero
@@ -390,7 +460,8 @@ function getDownloadStatus(filename) {
       progress: statusInfo.progress,
       startedAt: statusInfo.startedAt,
       completedAt: statusInfo.completedAt,
-      error: statusInfo.error
+      error: statusInfo.error,
+      title: statusInfo.title  // Incluir título original si está disponible
     };
   }
   
@@ -400,9 +471,18 @@ function getDownloadStatus(filename) {
   if (fs.existsSync(filePath)) {
     try {
       const stats = fs.statSync(filePath);
+      
+      // Extraer título del filename (formato: <titulo_sanitizado>_<videoId>.mp3)
+      const match = filename.match(/_([a-zA-Z0-9_-]{11})\.mp3$/);
+      const videoId = match ? match[1] : null;
+      const title = videoId 
+        ? filename.replace(`_${videoId}.mp3`, '').replace(/_/g, ' ')
+        : filename.replace('.mp3', '').replace(/_/g, ' ');
+      
       return {
         status: 'completed',
         filename: filename,
+        title: title,  // Título extraído del nombre de archivo
         size: stats.size,
         sizeFormatted: formatFileSize(stats.size),
         modifiedAt: stats.mtime.toISOString()
@@ -427,6 +507,7 @@ function getDownloadStatus(filename) {
         return {
           status: 'completed',
           filename: `video_${videoIdMatch[1]}.mp3`,
+          title: `video_${videoIdMatch[1]}`,  // Título fallback para formato legacy
           size: stats.size,
           sizeFormatted: formatFileSize(stats.size),
           modifiedAt: stats.mtime.toISOString()
@@ -467,8 +548,10 @@ module.exports = {
   downloadAudio,
   startBackgroundDownload,
   getDownloadStatus,
+  getVideoMetadata,
   isValidYouTubeUrl,
   sanitizeFilename,
+  sanitizeFilenameLegacy,
   generateFilenameFromUrl,
   extractVideoId,
   getDownloadPath: () => DOWNLOAD_PATH,
