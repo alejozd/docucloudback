@@ -174,6 +174,13 @@ app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
 app.use("/api", licenciaRoutes);
 
+// Montar rutas de descarga de audio desde YouTube (Antes de la protección global de /api)
+app.use("/api/audio-download", (req, res, next) => {
+  console.log(`[index] 🔄 Ruteando a /api/audio-download: ${req.method} ${req.url}`);
+  next();
+}, audioDownloadRoutes);
+console.log('✅ Audio download routes mounted at /api/audio-download');
+
 // 🛡️ Rate Limit: 30 peticiones por IP cada 15 minutos
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -208,10 +215,6 @@ if (global.telegramEnabled) {
 } else {
   console.log('ℹ️  Telegram routes skipped (variables not configured)');
 }
-
-// Montar rutas de descarga de audio desde YouTube
-app.use("/api/audio-download", audioDownloadRoutes);
-console.log('✅ Audio download routes mounted at /api/audio-download');
 
 // Ruta para la URL raíz
 app.get("/", (req, res) => {
