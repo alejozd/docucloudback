@@ -33,11 +33,11 @@ Inicia una tarea de procesamiento en segundo plano. El servidor responderá inme
 
 1. **Aumento de Volumen (`type: "volume"`):**
    - `level`: Número que indica la ganancia en decibelios (dB). Recomendado: 1 a 15.
-   - Genera un archivo con sufijo `_vol+Xdb.mp3`.
+   - Genera un archivo con sufijo `_TASKID_vol+Xdb.mp3` (donde TASKID son los primeros 8 caracteres del ID de tarea).
 
 2. **División de Audio (`type: "split"`):**
    - `interval`: Número en minutos para cada segmento.
-   - Genera archivos numerados con sufijo `_parte1.mp3`, `_parte2.mp3`, etc.
+   - Genera archivos numerados con sufijo `_TASKID_parte1.mp3`, `_TASKID_parte2.mp3`, etc.
    - Si se combina con volumen, la división se aplica sobre el archivo con volumen ya aplicado.
 
 - **Respuesta Exitosa (202 Accepted):**

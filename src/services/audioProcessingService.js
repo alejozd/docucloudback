@@ -183,12 +183,14 @@ async function runProcessingTask(task) {
   const splitOp = task.operations.find(op => op.type === 'split');
 
   let currentInput = sourcePath;
+  // Usar los primeros 8 caracteres del taskId para asegurar nombres únicos pero legibles
+  const taskPrefix = task.id.substring(0, 8);
   let baseName = task.originalFilename.replace(/\.[^/.]+$/, "");
 
   // 1. Aplicar Volumen si existe
   if (volOp) {
     const level = parseFloat(volOp.level) || 0;
-    const outputFilename = `${baseName}_vol+${level}db.mp3`;
+    const outputFilename = `${baseName}_${taskPrefix}_vol+${level}db.mp3`;
     const outputPath = path.join(DOWNLOAD_PATH, outputFilename);
 
     await applyVolume(currentInput, outputPath, level, task);
@@ -210,10 +212,10 @@ async function runProcessingTask(task) {
     const intervalSeconds = intervalMinutes * 60;
 
     // El output pattern para segment
-    const outputPattern = path.join(DOWNLOAD_PATH, `${baseName}_parte%d.mp3`);
+    const segmentBaseName = `${baseName}_${taskPrefix}`;
+    const outputPattern = path.join(DOWNLOAD_PATH, `${segmentBaseName}_parte%d.mp3`);
 
-    // Si ya existe el archivo final (volumen aplicado), baseName ya incluye _vol+Xdb
-    const parts = await splitAudio(currentInput, outputPattern, intervalSeconds, task, baseName);
+    const parts = await splitAudio(currentInput, outputPattern, intervalSeconds, task, segmentBaseName);
 
     task.generatedFiles.push(...parts);
   } else if (!volOp) {
@@ -226,8 +228,15 @@ async function runProcessingTask(task) {
  */
 function applyVolume(input, output, level, task) {
   return new Promise((resolve, reject) => {
-    const command = ffmpeg(input)
-      .timeout(parseInt(FFMPEG_TIMEOUT))
+    const command = ffmpeg(input);
+
+    // Timeout manual
+    const timeout = setTimeout(() => {
+      command.kill('SIGKILL');
+      reject(new Error('Tiempo de espera agotado en operación de volumen'));
+    }, parseInt(FFMPEG_TIMEOUT) * 1000);
+
+    command
       .audioFilters(`volume=${level}dB`)
       .on('progress', (progress) => {
         if (!progress.percent) return;
@@ -236,8 +245,14 @@ function applyVolume(input, output, level, task) {
         task.progress = hasSplit ? Math.round(progress.percent / 2) : Math.round(progress.percent);
         tasks.set(task.id, { ...task });
       })
-      .on('error', (err) => reject(err))
-      .on('end', () => resolve())
+      .on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      })
+      .on('end', () => {
+        clearTimeout(timeout);
+        resolve();
+      })
       .save(output);
   });
 }
@@ -249,8 +264,15 @@ function splitAudio(input, outputPattern, intervalSeconds, task, baseName) {
   return new Promise((resolve, reject) => {
     const hasVolume = task.operations.some(op => op.type === 'volume');
 
-    const command = ffmpeg(input)
-      .timeout(parseInt(FFMPEG_TIMEOUT))
+    const command = ffmpeg(input);
+
+    // Timeout manual
+    const timeout = setTimeout(() => {
+      command.kill('SIGKILL');
+      reject(new Error('Tiempo de espera agotado en operación de división'));
+    }, parseInt(FFMPEG_TIMEOUT) * 1000);
+
+    command
       .outputOptions([
         '-f', 'segment',
         '-segment_time', intervalSeconds.toString(),
@@ -264,8 +286,12 @@ function splitAudio(input, outputPattern, intervalSeconds, task, baseName) {
         task.progress = baseProgress + currentProgress;
         tasks.set(task.id, { ...task });
       })
-      .on('error', (err) => reject(err))
+      .on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      })
       .on('end', () => {
+        clearTimeout(timeout);
         // Buscar archivos generados
         const baseSearchPattern = `${baseName}_parte`;
         const files = fs.readdirSync(DOWNLOAD_PATH)

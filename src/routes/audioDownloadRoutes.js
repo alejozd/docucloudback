@@ -115,7 +115,7 @@ router.get('/download/:filename', audioDownloadController.getFile);
 router.delete('/delete/:filename', audioDownloadController.deleteFile);
 
 // Rutas de procesamiento de audio (PROTEGIDAS con apiKeyAuth)
-router.post('/process', audioProcessingController.processAudio);
-router.get('/process-status/:taskId', audioProcessingController.getProcessStatus);
+router.post('/process', apiKeyAuth, audioProcessingController.processAudio);
+router.get('/process-status/:taskId', apiKeyAuth, audioProcessingController.getProcessStatus);
 
 module.exports = router;
