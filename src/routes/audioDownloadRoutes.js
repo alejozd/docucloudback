@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const audioDownloadController = require('../controllers/audioDownloadController');
+const audioProcessingController = require('../controllers/audioProcessingController');
 const apiKeyAuth = require('../middleware/apiKeyAuth');
 const tempTokenService = require('../services/tempTokenService');
 const fs = require('fs');
@@ -112,5 +113,9 @@ router.get('/status/:filename', audioDownloadController.getDownloadStatus);
 router.get('/files', audioDownloadController.listFiles);
 router.get('/download/:filename', audioDownloadController.getFile);
 router.delete('/delete/:filename', audioDownloadController.deleteFile);
+
+// Rutas de procesamiento de audio (PROTEGIDAS con apiKeyAuth)
+router.post('/process', audioProcessingController.processAudio);
+router.get('/process-status/:taskId', audioProcessingController.getProcessStatus);
 
 module.exports = router;
