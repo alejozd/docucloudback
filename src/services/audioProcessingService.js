@@ -1,12 +1,41 @@
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
-// Configurar ruta de ffmpeg
-ffmpeg.setFfmpegPath(ffmpegStatic);
+// Intentar configurar ruta de ffmpeg de forma robusta
+let ffmpegPath = null;
+
+try {
+  // 1. Intentar usar ffmpeg-static
+  const ffmpegStatic = require('ffmpeg-static');
+  if (ffmpegStatic) {
+    ffmpegPath = ffmpegStatic;
+    console.log('[audioProcessingService] Usando FFmpeg de ffmpeg-static:', ffmpegPath);
+  }
+} catch (e) {
+  console.warn('[audioProcessingService] ffmpeg-static no encontrado, buscando en el sistema...');
+}
+
+if (!ffmpegPath) {
+  try {
+    // 2. Intentar buscar en el PATH del sistema
+    const systemFfmpeg = execSync('which ffmpeg || where ffmpeg').toString().trim().split('\n')[0];
+    if (systemFfmpeg) {
+      ffmpegPath = systemFfmpeg;
+      console.log('[audioProcessingService] Usando FFmpeg del sistema:', ffmpegPath);
+    }
+  } catch (e) {
+    console.warn('[audioProcessingService] FFmpeg no encontrado en el PATH del sistema');
+  }
+}
+
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+} else {
+  console.error('[audioProcessingService] CRÍTICO: No se pudo encontrar FFmpeg. El procesamiento de audio no funcionará.');
+}
 
 // Directorio de descargas (mismo que ytDlpService)
 const DOWNLOAD_PATH = process.env.AUDIO_DOWNLOAD_PATH || path.join(__dirname, '../../downloads/audios');
@@ -27,6 +56,13 @@ function ensureDownloadDirectory() {
 }
 
 /**
+ * Verifica si FFmpeg está disponible
+ */
+function isFfmpegAvailable() {
+  return !!ffmpegPath;
+}
+
+/**
  * Verifica el espacio en disco disponible en el directorio de descargas (en bytes)
  */
 async function getAvailableDiskSpace() {
@@ -34,8 +70,8 @@ async function getAvailableDiskSpace() {
     // df -Pk . devuelve el espacio en bloques de 1KB
     exec(`df -Pk "${DOWNLOAD_PATH}"`, (error, stdout) => {
       if (error) {
-        // Si df falla, asumimos que hay espacio o manejamos de otra forma
-        console.warn('[audioProcessingService] No se pudo verificar espacio en disco:', error.message);
+        // Si df falla (ej. Windows), asumimos que hay espacio o manejamos de otra forma
+        console.warn('[audioProcessingService] No se pudo verificar espacio en disco con df:', error.message);
         return resolve(Number.MAX_SAFE_INTEGER);
       }
 
@@ -57,6 +93,10 @@ async function getAvailableDiskSpace() {
  * Inicia un nuevo proceso de audio
  */
 async function startProcessing(filename, operations) {
+  if (!isFfmpegAvailable()) {
+    throw new Error('FFmpeg no está disponible en el servidor. El procesamiento de audio no puede iniciarse.');
+  }
+
   ensureDownloadDirectory();
 
   const sourcePath = path.join(DOWNLOAD_PATH, filename);
@@ -163,8 +203,6 @@ async function runProcessingTask(task) {
     // Si ya existe el archivo final (volumen aplicado), baseName ya incluye _vol+Xdb
     const parts = await splitAudio(currentInput, outputPattern, intervalSeconds, task, baseName);
 
-    // Si hubo un archivo temporal de volumen y se hizo split, tal vez el usuario solo quiera los fragmentos?
-    // Por ahora mantenemos ambos en generatedFiles.
     task.generatedFiles.push(...parts);
   } else if (!volOp) {
      throw new Error('No se especificaron operaciones válidas');
@@ -203,11 +241,8 @@ function splitAudio(input, outputPattern, intervalSeconds, task, baseName) {
         '-f', 'segment',
         '-segment_time', intervalSeconds.toString(),
         '-segment_start_number', '1',
-        '-c', 'copy' // Usamos copy para que sea rápido si es posible, aunque con filtros de audio no se puede
+        '-c', 'copy'
       ])
-      // Si aplicamos filtros, -c copy no funcionará bien. Pero aquí el input ya tiene el volumen si fue aplicado.
-      // Si queremos asegurar que sean MP3 válidos e independientes, a veces es mejor re-encodear.
-      // Pero 'copy' es mucho más rápido para splits.
       .on('progress', (progress) => {
         if (!progress.percent) return;
         const baseProgress = hasVolume ? 50 : 0;
@@ -255,5 +290,6 @@ function getTaskStatus(taskId) {
 
 module.exports = {
   startProcessing,
-  getTaskStatus
+  getTaskStatus,
+  isFfmpegAvailable
 };
