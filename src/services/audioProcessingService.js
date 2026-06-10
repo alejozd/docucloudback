@@ -45,6 +45,8 @@ const tasks = new Map();
 const queue = [];
 let activeTasks = 0;
 const MAX_CONCURRENT_TASKS = 2;
+const TASK_EXPIRY_TIME = 60 * 60 * 1000; // 1 hora
+const FFMPEG_TIMEOUT = process.env.AUDIO_PROCESS_TIMEOUT || 600; // 10 minutos por defecto
 
 /**
  * Asegura que el directorio existe
@@ -101,6 +103,7 @@ async function startProcessing(filename, operations) {
 
   const sourcePath = path.join(DOWNLOAD_PATH, filename);
   if (!fs.existsSync(sourcePath)) {
+    console.error(`[audioProcessingService] Archivo de origen no encontrado en: ${sourcePath}`);
     throw new Error('El archivo de origen no existe');
   }
 
@@ -121,6 +124,9 @@ async function startProcessing(filename, operations) {
 
   // Procesar cola de forma asíncrona
   processQueue();
+
+  // Limpiar tareas antiguas periódicamente
+  cleanupOldTasks();
 
   return taskId;
 }
@@ -188,8 +194,14 @@ async function runProcessingTask(task) {
     await applyVolume(currentInput, outputPath, level, task);
 
     task.generatedFiles.push(outputFilename);
+    const prevInput = currentInput;
     currentInput = outputPath;
     baseName = outputFilename.replace(/\.[^/.]+$/, "");
+
+    // Si el anterior input no es el archivo original, es un archivo intermedio y podemos borrarlo
+    if (prevInput !== sourcePath && fs.existsSync(prevInput)) {
+       try { fs.unlinkSync(prevInput); } catch(e) {}
+    }
   }
 
   // 2. Aplicar Split si existe
@@ -214,7 +226,8 @@ async function runProcessingTask(task) {
  */
 function applyVolume(input, output, level, task) {
   return new Promise((resolve, reject) => {
-    ffmpeg(input)
+    const command = ffmpeg(input)
+      .timeout(parseInt(FFMPEG_TIMEOUT))
       .audioFilters(`volume=${level}dB`)
       .on('progress', (progress) => {
         if (!progress.percent) return;
@@ -236,7 +249,8 @@ function splitAudio(input, outputPattern, intervalSeconds, task, baseName) {
   return new Promise((resolve, reject) => {
     const hasVolume = task.operations.some(op => op.type === 'volume');
 
-    ffmpeg(input)
+    const command = ffmpeg(input)
+      .timeout(parseInt(FFMPEG_TIMEOUT))
       .outputOptions([
         '-f', 'segment',
         '-segment_time', intervalSeconds.toString(),
@@ -265,6 +279,22 @@ function splitAudio(input, outputPattern, intervalSeconds, task, baseName) {
       })
       .save(outputPattern);
   });
+}
+
+/**
+ * Limpia tareas antiguas del Mapa para evitar fugas de memoria
+ */
+function cleanupOldTasks() {
+  const now = Date.now();
+  for (const [taskId, task] of tasks.entries()) {
+    if (task.status === 'completed' || task.status === 'failed') {
+      const finishedAt = task.completedAt || task.failedAt || task.createdAt;
+      if (now - new Date(finishedAt).getTime() > TASK_EXPIRY_TIME) {
+        tasks.delete(taskId);
+        console.log(`[audioProcessingService] Tarea expirada eliminada: ${taskId}`);
+      }
+    }
+  }
 }
 
 /**

@@ -1,4 +1,5 @@
 const audioProcessingService = require('../services/audioProcessingService');
+const path = require('path');
 
 /**
  * Inicia el procesamiento de audio (asíncrono)
@@ -6,7 +7,7 @@ const audioProcessingService = require('../services/audioProcessingService');
  */
 const processAudio = async (req, res) => {
   try {
-    const { filename, operations } = req.body;
+    let { filename, operations } = req.body;
 
     console.log('[audioProcessingController] Solicitud de procesamiento recibida');
     console.log('[audioProcessingController] Archivo:', filename);
@@ -19,6 +20,9 @@ const processAudio = async (req, res) => {
         error: 'El nombre de archivo es requerido'
       });
     }
+
+    // Sanitizar nombre de archivo para evitar path traversal
+    filename = path.basename(filename);
 
     if (!operations || !Array.isArray(operations) || operations.length === 0) {
       return res.status(400).json({
@@ -52,9 +56,11 @@ const processAudio = async (req, res) => {
     console.error('[audioProcessingController] Error al iniciar procesamiento:', error.message);
 
     if (error.message === 'El archivo de origen no existe') {
+      console.warn(`[audioProcessingController] Archivo no encontrado: ${filename}`);
       return res.status(404).json({
         success: false,
-        error: error.message
+        error: error.message,
+        filename: filename
       });
     }
 
