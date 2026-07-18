@@ -42,6 +42,8 @@ const downloadAudio = async (req, res) => {
       message: 'Descarga iniciada en segundo plano',
       filename: taskInfo.filename,
       title: taskInfo.title,
+      duration: taskInfo.duration,
+      thumbnail: taskInfo.thumbnail,
       status: 'downloading',
       statusUrl: `/api/audio-download/status/${encodeURIComponent(taskInfo.filename)}`,
       downloadUrl: `/api/audio-download/download/${encodeURIComponent(taskInfo.filename)}`
@@ -131,14 +133,20 @@ const listFiles = async (req, res) => {
         const videoId = match ? match[1] : null;
         
         // El título es todo lo anterior al ID
-        const title = videoId 
+        const title = videoId
           ? file.replace(`_${videoId}.mp3`, '').replace(/_/g, ' ')
           : file.replace('.mp3', '').replace(/_/g, ' ');
-        
+
+        // Si el archivo fue descargado en esta sesión de estado, tenemos título
+        // original, miniatura y duración reales; si no, nos quedamos con lo derivado del nombre
+        const statusInfo = ytDlpService.getDownloadStatus(file);
+
         return {
           name: file,
-          title: title,
+          title: statusInfo.title || title,
           videoId: videoId,
+          thumbnail: statusInfo.thumbnail || null,
+          duration: statusInfo.duration || null,
           size: stats.size,
           sizeFormatted: formatFileSize(stats.size),
           createdAt: stats.birthtime,

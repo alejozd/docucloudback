@@ -5,6 +5,9 @@ const fs = require('fs');
 // Obtener ruta de descargas desde variable de entorno o usar default
 const DOWNLOAD_PATH = process.env.AUDIO_DOWNLOAD_PATH || path.join(__dirname, '../../downloads/audios');
 
+// Archivo donde se persiste el estado de las descargas, para sobrevivir a reinicios del servidor
+const STATUS_FILE_PATH = path.join(DOWNLOAD_PATH, '..', 'download-status.json');
+
 // Almacenar estado de las descargas en curso
 const downloadStatus = new Map();
 
@@ -16,6 +19,58 @@ function ensureDownloadDirectory() {
     fs.mkdirSync(DOWNLOAD_PATH, { recursive: true });
   }
 }
+
+/**
+ * Persiste el estado actual de todas las descargas en disco.
+ * No debe interrumpir el flujo de la descarga si falla la escritura.
+ */
+function persistStatus() {
+  try {
+    ensureDownloadDirectory();
+    const plainObject = Object.fromEntries(downloadStatus);
+    fs.writeFileSync(STATUS_FILE_PATH, JSON.stringify(plainObject, null, 2));
+  } catch (err) {
+    console.error('[ytDlpService] No se pudo persistir el estado de descargas:', err.message);
+  }
+}
+
+/**
+ * Carga el estado persistido al iniciar el servidor y reconcilia las tareas
+ * que quedaron marcadas como "downloading": el proceso de yt-dlp murió junto
+ * con el servidor anterior, así que no van a completarse solas. Sin esto, el
+ * cliente hace polling para siempre porque nunca llega a un estado terminal.
+ */
+function loadPersistedStatus() {
+  try {
+    if (!fs.existsSync(STATUS_FILE_PATH)) return;
+
+    const raw = fs.readFileSync(STATUS_FILE_PATH, 'utf-8');
+    const parsed = JSON.parse(raw);
+    let reconciled = false;
+
+    for (const [filename, statusInfo] of Object.entries(parsed)) {
+      if (statusInfo.status === 'downloading') {
+        const expectedPath = path.join(DOWNLOAD_PATH, filename);
+        if (fs.existsSync(expectedPath)) {
+          statusInfo.status = 'completed';
+          statusInfo.progress = 100;
+          statusInfo.completedAt = new Date().toISOString();
+        } else {
+          statusInfo.status = 'failed';
+          statusInfo.error = 'La descarga se interrumpió porque el servidor se reinició. Por favor, inténtalo de nuevo.';
+        }
+        reconciled = true;
+      }
+      downloadStatus.set(filename, statusInfo);
+    }
+
+    if (reconciled) persistStatus();
+  } catch (err) {
+    console.error('[ytDlpService] No se pudo cargar el estado persistido de descargas:', err.message);
+  }
+}
+
+loadPersistedStatus();
 
 /**
  * Valida que la URL sea de YouTube
@@ -272,12 +327,16 @@ async function startBackgroundDownload(url) {
     id: videoId,
     url: url,
     title: metadata.title,
+    duration: metadata.duration,
+    thumbnail: metadata.thumbnail,
     filename: expectedFilename,
     status: 'downloading',
     progress: 0,
+    message: 'Iniciando descarga...',
     error: null,
     createdAt: new Date()
   });
+  persistStatus();
 
   // Template de salida con título sanitizado + ID para nombre predecible
   const outputTemplate = path.join(DOWNLOAD_PATH, `${sanitizedTitle}_${videoId}.%(ext)s`);
@@ -300,15 +359,31 @@ async function startBackgroundDownload(url) {
 
   ytDlpProcess.stdout.on('data', (data) => {
     const chunk = data.toString();
-    
-    // Intentar extraer progreso del output
-    const progressMatch = chunk.match(/\[download\]\s+(\d+\.?\d*)%/);
-    if (progressMatch) {
-      const currentStatus = downloadStatus.get(expectedFilename);
-      if (currentStatus) {
-        currentStatus.progress = parseFloat(progressMatch[1]);
+    const currentStatus = downloadStatus.get(expectedFilename);
+    if (!currentStatus) return;
+
+    // Un mismo chunk puede traer varias actualizaciones de progreso (líneas con \r);
+    // matchAll + tomar la última evita quedarnos con el primer % del chunk en vez del más reciente.
+    const progressMatches = [...chunk.matchAll(/\[download\]\s+(\d+\.?\d*)%/g)];
+    if (progressMatches.length > 0) {
+      const lastMatch = progressMatches[progressMatches.length - 1];
+      const newProgress = parseFloat(lastMatch[1]);
+      if (newProgress !== currentStatus.progress) {
+        currentStatus.progress = newProgress;
+        currentStatus.message = `Descargando... ${newProgress}%`;
         downloadStatus.set(expectedFilename, currentStatus);
+        persistStatus();
       }
+      return;
+    }
+
+    // yt-dlp deja de emitir líneas "[download] X%" cuando termina de bajar el stream
+    // y pasa a convertir a MP3 con ffmpeg. Sin esto la barra se ve congelada en ~99%
+    // durante esa fase, aunque el proceso sigue vivo.
+    if (/\[ExtractAudio\]|\[ffmpeg\]/.test(chunk) && currentStatus.message !== 'Convirtiendo a MP3...') {
+      currentStatus.message = 'Convirtiendo a MP3...';
+      downloadStatus.set(expectedFilename, currentStatus);
+      persistStatus();
     }
   });
 
@@ -327,9 +402,11 @@ async function startBackgroundDownload(url) {
         try {
           const stats = fs.statSync(predictedFilePath);
           console.log(`[ytDlpService] Descarga completada: ${expectedFilename}`);
-          
-          // Actualizar estado con el nombre predecible del archivo
+
+          // Actualizar estado con el nombre predecible del archivo, preservando
+          // title/duration/thumbnail del estado inicial en vez de descartarlos
           downloadStatus.set(expectedFilename, {
+            ...currentStatus,
             status: 'completed',
             url: url,
             startedAt: currentStatus?.startedAt || new Date().toISOString(),
@@ -361,9 +438,10 @@ async function startBackgroundDownload(url) {
           if (files.length > 0) {
             const actualFile = files[0];
             console.log(`[ytDlpService] Descarga completada: ${actualFile.name}`);
-            
-            // Actualizar estado con el nombre real del archivo
+
+            // Actualizar estado con el nombre real del archivo, preservando metadata previa
             downloadStatus.set(actualFile.name, {
+              ...currentStatus,
               status: 'completed',
               url: url,
               startedAt: currentStatus?.startedAt || new Date().toISOString(),
@@ -399,6 +477,8 @@ async function startBackgroundDownload(url) {
         downloadStatus.set(expectedFilename, currentStatus);
       }
     }
+
+    persistStatus();
   });
 
   ytDlpProcess.on('error', (err) => {
@@ -406,17 +486,20 @@ async function startBackgroundDownload(url) {
     const currentStatus = downloadStatus.get(expectedFilename);
     if (currentStatus) {
       currentStatus.status = 'failed';
-      currentStatus.error = err.code === 'ENOENT' 
-        ? 'yt-dlp no está instalado' 
+      currentStatus.error = err.code === 'ENOENT'
+        ? 'yt-dlp no está instalado'
         : err.message;
       downloadStatus.set(expectedFilename, currentStatus);
+      persistStatus();
     }
   });
 
   return {
     filename: expectedFilename,
     expectedPath: expectedPath,
-    title: metadata.title
+    title: metadata.title,
+    duration: metadata.duration,
+    thumbnail: metadata.thumbnail
   };
 }
 
@@ -435,10 +518,13 @@ function getDownloadStatus(filename) {
       filename: statusInfo.actualFilename || filename,
       size: statusInfo.size,
       progress: statusInfo.progress,
+      message: statusInfo.message,
       startedAt: statusInfo.startedAt,
       completedAt: statusInfo.completedAt,
       error: statusInfo.error,
-      title: statusInfo.title
+      title: statusInfo.title,
+      duration: statusInfo.duration,
+      thumbnail: statusInfo.thumbnail
     };
   }
   
