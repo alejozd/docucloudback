@@ -1,4 +1,4 @@
-const { TomaTensionSync } = require("../models");
+const { TomaTensionSync, Paciente } = require("../models");
 const { Op } = require("sequelize");
 
 const isDateWithoutTime = (dateValue) => {
@@ -40,6 +40,13 @@ const syncTomaTension = async (req, res) => {
       });
     }
 
+    const paciente = await Paciente.findByPk(paciente_id);
+    if (!paciente) {
+      return res.status(400).json({
+        message: `paciente_id ${paciente_id} no corresponde a ningún paciente registrado`,
+      });
+    }
+
     const registro = await TomaTensionSync.create({
       paciente_id,
       sistole,
@@ -59,7 +66,13 @@ const syncTomaTension = async (req, res) => {
 
 const getTomaTensionSync = async (req, res) => {
   try {
-    const { fecha_inicio, fecha_fin, page = "1", limit = "20" } = req.query;
+    const {
+      fecha_inicio,
+      fecha_fin,
+      paciente_id,
+      page = "1",
+      limit = "20",
+    } = req.query;
 
     const pagina = Number.parseInt(page, 10);
     const limite = Number.parseInt(limit, 10);
@@ -68,6 +81,16 @@ const getTomaTensionSync = async (req, res) => {
       return res.status(400).json({
         message: "El parámetro page debe ser un número mayor o igual a 1",
       });
+    }
+
+    let pacienteIdFiltro;
+    if (paciente_id !== undefined) {
+      pacienteIdFiltro = Number.parseInt(paciente_id, 10);
+      if (Number.isNaN(pacienteIdFiltro)) {
+        return res.status(400).json({
+          message: "El parámetro paciente_id debe ser un número",
+        });
+      }
     }
 
     if (Number.isNaN(limite) || limite < 1 || limite > 100) {
@@ -115,6 +138,9 @@ const getTomaTensionSync = async (req, res) => {
         [Op.lte]: fin,
       };
     }
+    if (pacienteIdFiltro !== undefined) {
+      where.paciente_id = pacienteIdFiltro;
+    }
 
     const offset = (pagina - 1) * limite;
 
@@ -123,8 +149,9 @@ const getTomaTensionSync = async (req, res) => {
         where,
         limit: limite,
         offset,
-      order: [["fecha_registro", "DESC"], ["id", "DESC"]],
-    });
+        include: [{ model: Paciente, as: "paciente" }],
+        order: [["fecha_registro", "DESC"], ["id", "DESC"]],
+      });
 
     return res.status(200).json({
       data: registros,
@@ -137,6 +164,7 @@ const getTomaTensionSync = async (req, res) => {
       filters: {
         fecha_inicio: fecha_inicio || null,
         fecha_fin: fecha_fin || null,
+        paciente_id: pacienteIdFiltro ?? null,
       },
     });
   } catch (error) {

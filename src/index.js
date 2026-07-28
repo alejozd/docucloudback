@@ -71,6 +71,7 @@ const pagoRoutes = require("./routes/pagoRoutes");
 const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
+const pacienteRoutes = require("./routes/pacienteRoutes");
 const licenciaRoutes = require("./routes/licenciaRoutes");
 const telegramRoutes = require("./routes/telegram.routes");
 const apiRoutes = require("./routes/api.routes");
@@ -172,6 +173,7 @@ app.use(
 );
 app.use("/api", autorizacionRoutes({ Autorizacion, RegistroSolicitud }));
 app.use("/api", tomaTensionSyncRoutes);
+app.use("/api", pacienteRoutes);
 app.use("/api", licenciaRoutes);
 
 // Montar rutas de descarga de audio desde YouTube (Antes de la protección global de /api)
