@@ -659,6 +659,9 @@ describe("Licencia Service", () => {
 
       expect(resultado.timestamp).toEqual(expect.any(Number));
       expect(resultado.firma).toEqual(expect.any(String));
+      // expira debe ser ya un string ISO (no un Date crudo) para que lo firmado coincida
+      // con lo que Express serializa realmente en la respuesta HTTP (ver bug fijado abajo).
+      expect(resultado.expira).toBe(fechaExpiracion.toISOString());
 
       const firmaEsperada = crypto
         .createHmac("sha256", SECRET)
@@ -688,6 +691,7 @@ describe("Licencia Service", () => {
       expect(resultado.estado).toBe("bloqueado");
       expect(resultado.mensaje).toBe("licencia_expirada");
       expect(resultado.firma).toEqual(expect.any(String));
+      expect(resultado.expira).toBe(fechaExpiracion.toISOString());
 
       const firmaEsperada = crypto
         .createHmac("sha256", SECRET)
@@ -722,6 +726,68 @@ describe("Licencia Service", () => {
 
       expect(resultado.error).toBe("instalacion_invalida");
       expect(resultado.firma).toBeUndefined();
+    });
+  });
+
+  // Regresión: la firma debe verificar contra la respuesta HTTP realmente serializada
+  // (Express usa JSON.stringify/Date.toJSON, no template literals/Date.toString) —
+  // por eso este bloque monta un servidor real en vez de leer el objeto JS interno.
+  describe("GET /api/licencia/estado - firma HMAC sobre la respuesta HTTP real", () => {
+    const express = require("express");
+    const licenciaRoutes = require("../../routes/licenciaRoutes");
+    const SECRET = "test-secret";
+    let server;
+    let baseUrl;
+
+    beforeAll((done) => {
+      process.env.LICENSE_SECRET = SECRET;
+      const app = express();
+      app.use(express.json());
+      app.use("/api", licenciaRoutes);
+      server = app.listen(0, () => {
+        baseUrl = `http://127.0.0.1:${server.address().port}`;
+        done();
+      });
+    });
+
+    afterAll((done) => {
+      server.close(done);
+    });
+
+    it("la firma recibida debe coincidir con el HMAC recalculado a partir del JSON real de la respuesta", async () => {
+      const nit = "900999888";
+      const app = "NEXOPAGO";
+      const instalacion_hash = "hash-http-1";
+      const fechaExpiracion = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      const mockLicencia = {
+        nit,
+        app,
+        estado: "activa",
+        tipo_licencia: "anual",
+        instalacion_hash,
+        fecha_expiracion: fechaExpiracion,
+        version_app: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const res = await fetch(
+        `${baseUrl}/api/licencia/estado?nit=${nit}&app=${app}&instalacion_hash=${instalacion_hash}`
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(typeof body.expira).toBe("string");
+      expect(body.expira).toBe(fechaExpiracion.toISOString());
+
+      const firmaRecalculada = crypto
+        .createHmac("sha256", SECRET)
+        .update(`${nit}|${app}|${instalacion_hash}|${body.estado}|${body.expira}|${body.timestamp}`)
+        .digest("hex");
+
+      expect(body.firma).toBe(firmaRecalculada);
     });
   });
 });

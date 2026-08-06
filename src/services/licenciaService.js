@@ -43,10 +43,17 @@ function decodificarPayload(payloadBase64) {
 }
 
 // Firma HMAC SHA256 para la respuesta de obtenerEstado (permite al cliente cachear y verificar integridad)
-function firmarEstado(nit, app, instalacion_hash, estado, expira, timestamp) {
-  const mensaje = `${nit}|${app}|${instalacion_hash}|${estado}|${expira}|${timestamp}`;
+// `expira` debe venir ya normalizado a string ISO (o null) — nunca un Date crudo, porque
+// Date.prototype.toString() (usado por la interpolación de template literals) no coincide
+// con Date.prototype.toJSON() (usado por JSON.stringify/res.json al serializar la respuesta HTTP real).
+function firmarEstado(nit, app, instalacion_hash, estado, expiraISO, timestamp) {
+  const mensaje = `${nit}|${app}|${instalacion_hash}|${estado}|${expiraISO}|${timestamp}`;
   return crypto.createHmac("sha256", getSecret()).update(mensaje).digest("hex");
 }
+
+// Normaliza fecha_expiracion a string ISO 8601 (o null) para que el valor firmado sea
+// idéntico al que efectivamente viaja en el JSON de la respuesta.
+const normalizarExpiraISO = (fecha) => (fecha ? new Date(fecha).toISOString() : null);
 
 const validarApp = (app) => {
   if (!app || typeof app !== "string" || app.trim() === "") {
@@ -730,17 +737,18 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
       licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
       const timestampBloqueado = Date.now();
+      const expiraISOBloqueado = normalizarExpiraISO(licencia.fecha_expiracion);
       return {
         estado: ESTADOS.BLOQUEADO,
         tipo_licencia: licencia.tipo_licencia,
-        expira: licencia.fecha_expiracion,
+        expira: expiraISOBloqueado,
         dias_restantes: 0,
         instalacion_hash: licencia.instalacion_hash,
         app: licencia.app,
         version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
         timestamp: timestampBloqueado,
-        firma: firmarEstado(nit, app, licencia.instalacion_hash, ESTADOS.BLOQUEADO, licencia.fecha_expiracion, timestampBloqueado),
+        firma: firmarEstado(nit, app, licencia.instalacion_hash, ESTADOS.BLOQUEADO, expiraISOBloqueado, timestampBloqueado),
       };
     }
 
@@ -751,16 +759,17 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
     await licencia.save();
 
     const timestamp = Date.now();
+    const expiraISO = normalizarExpiraISO(licencia.fecha_expiracion);
     return {
       estado: licencia.estado,
       tipo_licencia: licencia.tipo_licencia,
-      expira: licencia.fecha_expiracion,
+      expira: expiraISO,
       dias_restantes: calcularDiasRestantes(licencia.fecha_expiracion),
       instalacion_hash: licencia.instalacion_hash,
       app: licencia.app,
       version_app: version_app || licencia.version_app || null,
       timestamp,
-      firma: firmarEstado(nit, app, licencia.instalacion_hash, licencia.estado, licencia.fecha_expiracion, timestamp),
+      firma: firmarEstado(nit, app, licencia.instalacion_hash, licencia.estado, expiraISO, timestamp),
     };
   } catch (error) {
     console.error("Error en obtenerEstado:", error.message);
