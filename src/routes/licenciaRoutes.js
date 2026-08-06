@@ -1,4 +1,5 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const {
   activar,
   validar,
@@ -14,6 +15,15 @@ const { obtenerEstado, listarLicencias, editarLicencia } = require("../services/
 const { authenticateToken } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
+
+// 🛡️ Rate limit para endpoints públicos sin API key (evita abuso/enumeración de nit)
+const licenciaPublicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Demasiadas peticiones. Intenta en 15 minutos." },
+});
 
 // GET /api/licencias/listado (protegido con JWT)
 router.get("/licencias/listado", authenticateToken, async (req, res) => {
@@ -82,7 +92,7 @@ router.put("/licencias/editar/:id", authenticateToken, async (req, res) => {
 });
 
 // GET /api/licencia/estado
-router.get("/licencia/estado", async (req, res) => {
+router.get("/licencia/estado", licenciaPublicLimiter, async (req, res) => {
   try {
     let { nit, app, instalacion_hash, version_app } = req.query;
 
@@ -136,7 +146,7 @@ router.post("/licencias/generar-codigo", verificarApiKey, generarCodigo);
 
 // POST /api/licencia/activar-online (activación online sin exponer código)
 // Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
-router.post("/licencias/activar-online", activarEnLinea);
+router.post("/licencias/activar-online", licenciaPublicLimiter, activarEnLinea);
 
 // POST /api/licencias/convertir (conversión de licencia - pendiente de activación)
 router.post("/licencias/convertir", convertir);

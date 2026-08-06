@@ -632,4 +632,96 @@ describe("Licencia Service", () => {
       expect(mockLicenciaExacta.app).toBe(app);
     });
   });
+
+  describe("obtenerEstado", () => {
+    const nit = "900123456";
+    const app = "NEXOPAGO";
+    const instalacion_hash = "hash-nexopago-1";
+    const SECRET = "test-secret";
+    process.env.LICENSE_SECRET = SECRET;
+
+    it("debe incluir timestamp y firma HMAC válida en una consulta exitosa", async () => {
+      const fechaExpiracion = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const mockLicencia = {
+        nit,
+        app,
+        estado: "activa",
+        tipo_licencia: "anual",
+        instalacion_hash,
+        fecha_expiracion: fechaExpiracion,
+        version_app: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.obtenerEstado(nit, app, instalacion_hash);
+
+      expect(resultado.timestamp).toEqual(expect.any(Number));
+      expect(resultado.firma).toEqual(expect.any(String));
+
+      const firmaEsperada = crypto
+        .createHmac("sha256", SECRET)
+        .update(`${nit}|${app}|${instalacion_hash}|${resultado.estado}|${resultado.expira}|${resultado.timestamp}`)
+        .digest("hex");
+
+      expect(resultado.firma).toBe(firmaEsperada);
+    });
+
+    it("debe incluir timestamp y firma también cuando la licencia está expirada (bloqueado)", async () => {
+      const fechaExpiracion = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const mockLicencia = {
+        nit,
+        app,
+        estado: "activa",
+        tipo_licencia: "anual",
+        instalacion_hash,
+        fecha_expiracion: fechaExpiracion,
+        version_app: null,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.obtenerEstado(nit, app, instalacion_hash);
+
+      expect(resultado.estado).toBe("bloqueado");
+      expect(resultado.mensaje).toBe("licencia_expirada");
+      expect(resultado.firma).toEqual(expect.any(String));
+
+      const firmaEsperada = crypto
+        .createHmac("sha256", SECRET)
+        .update(`${nit}|${app}|${instalacion_hash}|bloqueado|${resultado.expira}|${resultado.timestamp}`)
+        .digest("hex");
+
+      expect(resultado.firma).toBe(firmaEsperada);
+    });
+
+    it("no debe incluir firma cuando no existe licencia (no_autorizado)", async () => {
+      mockLicenciaModel.findOne.mockResolvedValue(null);
+
+      const resultado = await licenciaService.obtenerEstado(nit, app, instalacion_hash);
+
+      expect(resultado.error).toBe("no_autorizado");
+      expect(resultado.firma).toBeUndefined();
+      expect(resultado.timestamp).toBeUndefined();
+    });
+
+    it("no debe incluir firma cuando el instalacion_hash no coincide", async () => {
+      const mockLicencia = {
+        nit,
+        app,
+        estado: "activa",
+        instalacion_hash: "otro-hash-registrado",
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockLicenciaModel.findOne.mockResolvedValue(mockLicencia);
+
+      const resultado = await licenciaService.obtenerEstado(nit, app, instalacion_hash);
+
+      expect(resultado.error).toBe("instalacion_invalida");
+      expect(resultado.firma).toBeUndefined();
+    });
+  });
 });
