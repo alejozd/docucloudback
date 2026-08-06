@@ -42,6 +42,12 @@ function decodificarPayload(payloadBase64) {
   return JSON.parse(json);
 }
 
+// Firma HMAC SHA256 para la respuesta de obtenerEstado (permite al cliente cachear y verificar integridad)
+function firmarEstado(nit, app, instalacion_hash, estado, expira, timestamp) {
+  const mensaje = `${nit}|${app}|${instalacion_hash}|${estado}|${expira}|${timestamp}`;
+  return crypto.createHmac("sha256", getSecret()).update(mensaje).digest("hex");
+}
+
 const validarApp = (app) => {
   if (!app || typeof app !== "string" || app.trim() === "") {
     throw new Error("app_requerida");
@@ -723,6 +729,7 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
     if (licencia.fecha_expiracion && new Date(licencia.fecha_expiracion) < ahora) {
       licencia.estado = ESTADOS.BLOQUEADO;
       await licencia.save();
+      const timestampBloqueado = Date.now();
       return {
         estado: ESTADOS.BLOQUEADO,
         tipo_licencia: licencia.tipo_licencia,
@@ -732,6 +739,8 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
         app: licencia.app,
         version_app: version_app || licencia.version_app || null,
         mensaje: "licencia_expirada",
+        timestamp: timestampBloqueado,
+        firma: firmarEstado(nit, app, licencia.instalacion_hash, ESTADOS.BLOQUEADO, licencia.fecha_expiracion, timestampBloqueado),
       };
     }
 
@@ -741,6 +750,7 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
     if (version_app) licencia.version_app = version_app;
     await licencia.save();
 
+    const timestamp = Date.now();
     return {
       estado: licencia.estado,
       tipo_licencia: licencia.tipo_licencia,
@@ -749,6 +759,8 @@ const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app)
       instalacion_hash: licencia.instalacion_hash,
       app: licencia.app,
       version_app: version_app || licencia.version_app || null,
+      timestamp,
+      firma: firmarEstado(nit, app, licencia.instalacion_hash, licencia.estado, licencia.fecha_expiracion, timestamp),
     };
   } catch (error) {
     console.error("Error en obtenerEstado:", error.message);
