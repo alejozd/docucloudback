@@ -399,12 +399,16 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
 
       let message = `✈️ <b>Mi Flota ZAM-AIR</b>\n\n`;
 
+      // parseAircraft() normaliza los campos a camelCase (registration, makeModel, fuelLevel,
+      // hoursTo100Hr...); los nombres en PascalCase que se buscaban antes (ac.MakeModel,
+      // ac.FuelLevel, ac.HoursTo100Hr) no existen en la salida del parser y siempre caían
+      // a "N/A", incluso cuando FSE sí devolvía datos.
       for (const ac of aircraft) {
-        const reg = ac.Registration || ac.registration || 'N/A';
-        const model = ac.MakeModel || ac.makemodel || 'N/A';
-        const location = ac.Location || ac.location || 'Desconocida';
-        const fuel = ac.FuelLevel ? `${ac.FuelLevel}%` : 'N/A';
-        const maint = ac.HoursTo100Hr ? `${ac.HoursTo100Hr}h` : 'N/A';
+        const reg = ac.registration || 'N/A';
+        const model = ac.makeModel || 'N/A';
+        const location = ac.location || 'Desconocida';
+        const fuel = ac.fuelLevel != null ? `${ac.fuelLevel}%` : 'N/A';
+        const maint = ac.hoursTo100Hr != null ? `${ac.hoursTo100Hr.toFixed(1)}h` : 'N/A';
 
         message += `<b>${reg}</b> - ${model}\n`;
         message += `├─ 📍 ${location}\n`;
@@ -483,28 +487,17 @@ Soy tu asistente personal para monitorear tu operación en <i>FSEconomy</i>.
     try {
       DebugLogger.log('TELEGRAM', '/stats requested');
 
-      const response = await axios.get('https://server.fseconomy.net/data', {
-        params: {
-          userkey: process.env.FSE_USERKEY,
-          format: 'xml',
-          query: 'statistics',
-          search: 'key',
-          readaccesskey: process.env.FSE_READ_KEY,
-        },
-        timeout: 15000,
-      });
-
-      const stats = await xmlParser.parseFSEXml(response.data, 'statistics');
-      const totalHours = parseFloat(stats.TotalHours || stats.totalhours || stats.TotalHoursFlown || 0);
-      const totalEarnings = parseFloat(stats.TotalEarnings || stats.totalearnings || 0);
-      const totalFlights = parseInt(stats.TotalFlights || stats.totalflights || 0, 10);
-      const totalDistance = parseFloat(stats.TotalDistance || stats.totaldistance || 0);
+      // Reutiliza el mismo método que ya usa el dashboard web (GET /api/stats), en vez de
+      // volver a pedir y parsear el XML a mano: ese parseo manual buscaba campos como
+      // stats.TotalHours/stats.totalhours, pero parseStatistics() los normaliza a camelCase
+      // (totalHours), así que nunca hacían match y el mensaje siempre mostraba 0.
+      const stats = await this.fseconomyService.getStatistics();
 
       const message = `📊 <b>Estadísticas de alejozd</b>\n\n`
-        + `⏱️ Horas voladas: <b>${totalHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h</b>\n`
-        + `💰 Ingresos totales: <b>$${totalEarnings.toLocaleString('en-US', { maximumFractionDigits: 0 })}</b>\n`
-        + `✈️ Vuelos completados: <b>${totalFlights.toLocaleString('en-US')}</b>\n`
-        + `🗺️ Distancia total: <b>${totalDistance.toLocaleString('en-US', { maximumFractionDigits: 0 })} nm</b>`;
+        + `⏱️ Horas voladas: <b>${stats.totalHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h</b>\n`
+        + `💰 Balance personal: <b>$${stats.personalBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</b>\n`
+        + `✈️ Vuelos completados: <b>${stats.totalFlights.toLocaleString('en-US')}</b>\n`
+        + `🗺️ Distancia total: <b>${stats.totalDistance.toLocaleString('en-US', { maximumFractionDigits: 0 })} nm</b>`;
 
       await this.telegramService.sendMessage(chatId, message);
     } catch (error) {
