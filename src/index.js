@@ -9,12 +9,6 @@ const {
   Cliente,
   Contacto,
   AsociarClienteContacto,
-  ClienteMedio,
-  SerialERP,
-  ClaveGenerada,
-  Vendedor,
-  Venta,
-  Pago,
   RegistroSolicitud,
   Autorizacion,
   Licencia,
@@ -43,9 +37,6 @@ try {
 const fseMonitorJob = require("./jobs/fse-monitor.job");
 
 // Importar controladores
-const serialesERPController = require("./controllers/serialesERPController");
-const clientesMediosController = require("./controllers/clientesMediosController");
-const clavesMediosGeneradasController = require("./controllers/clavesMediosGeneradasController");
 const videoController = require("./controllers/videoController");
 
 // Importar rutas
@@ -61,13 +52,6 @@ const reporteRoutes = require("./routes/reporteRoutes");
 const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
-const claveMediosRoutes = require("./routes/claveMediosRoutes");
-const clientesMediosRoutes = require("./routes/clientesMediosRoutes");
-const serialesERPRoutes = require("./routes/serialesERPRoutes");
-const clavesMediosGeneradasRoutes = require("./routes/clavesMediosGeneradasRoutes");
-const vendedoresRoutes = require("./routes/vendedoresRoutes");
-const ventaRoutes = require("./routes/ventaRoutes");
-const pagoRoutes = require("./routes/pagoRoutes");
 const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
@@ -144,29 +128,8 @@ app.use("/grabaciones", express.static("/var/www/radio_grabaciones"));
 app.use("/api/video", videoRoutes);
 
 // Pasar modelos a rutas que lo necesitan
-app.use("/api", claveMediosRoutes({ SerialERP, ClaveGenerada }));
 app.use("/api", authRoutes);
 app.use("/api", reporteRoutes);
-app.use(
-  "/api/clientes-medios",
-  clientesMediosRoutes({ ClienteMedio, clientesMediosController, Vendedor })
-);
-app.use(
-  "/api/seriales-erp",
-  serialesERPRoutes({ SerialERP, ClienteMedio, serialesERPController })
-);
-app.use(
-  "/api/claves-medios-generadas",
-  clavesMediosGeneradasRoutes({
-    ClaveGenerada,
-    clavesMediosGeneradasController,
-    SerialERP,
-    ClienteMedio,
-  })
-);
-app.use("/api/vendedores", vendedoresRoutes({ Vendedor, Venta, Pago }));
-app.use("/api/ventas", ventaRoutes({ Venta, Vendedor, ClienteMedio }));
-app.use("/api/pagos", pagoRoutes({ Pago, Venta }));
 app.use(
   "/api/registro-solicitudes",
   registroSolicitudRoutes({ RegistroSolicitud, Autorizacion })

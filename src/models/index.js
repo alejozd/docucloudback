@@ -9,15 +9,6 @@ const AsociarClienteContacto = require("./AsociarClienteContacto")(
   sequelize,
   Sequelize.DataTypes
 );
-const ClienteMedio = require("./ClienteMedio")(sequelize, Sequelize.DataTypes);
-const SerialERP = require("./SerialERP")(sequelize, Sequelize.DataTypes);
-const ClaveGenerada = require("./ClaveGenerada")(
-  sequelize,
-  Sequelize.DataTypes
-);
-const Vendedor = require("./Vendedor")(sequelize, Sequelize.DataTypes);
-const Venta = require("./Venta")(sequelize, Sequelize.DataTypes);
-const Pago = require("./Pago")(sequelize, Sequelize.DataTypes);
 const RegistroSolicitud = require("./RegistroSolicitud")(
   sequelize,
   Sequelize.DataTypes
@@ -36,12 +27,6 @@ require("../associations")({
   Contacto,
   Segmento,
   AsociarClienteContacto,
-  ClienteMedio,
-  SerialERP,
-  ClaveGenerada,
-  Vendedor,
-  Venta,
-  Pago,
   RegistroSolicitud,
   Autorizacion,
   TomaTensionSync,
@@ -55,12 +40,6 @@ module.exports = {
   Contacto,
   Segmento,
   AsociarClienteContacto,
-  ClienteMedio,
-  SerialERP,
-  ClaveGenerada,
-  Vendedor,
-  Venta,
-  Pago,
   RegistroSolicitud,
   Autorizacion,
   TomaTensionSync,
