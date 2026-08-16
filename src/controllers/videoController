@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const mm = require("music-metadata");
+const videoProcessingService = require("../services/videoProcessingService");
 
 // Define la ruta base donde se guardarán los videos
 const VIDEO_BASE_DIR = "/var/www/videos";
@@ -11,83 +12,99 @@ const VIDEO_BASE_DIR = "/var/www/videos";
 // Esta función SÓLO se llama una vez al inicio del servidor (desde index.js)
 // =========================================================
 async function scanAndProcessVideos() {
-  const promises = []; // Array para guardar todas las promesas de lectura de metadatos
+  const items = []; // { itemPath, itemRelativePath, carpeta }
 
-  // Función recursiva para recorrer directorios
-  const readDirectory = async (currentPath, relativePath = "") => {
-    const items = fs.readdirSync(currentPath);
+  // Función recursiva para recorrer directorios (síncrona: fs.readdirSync/statSync ya lo son)
+  const readDirectory = (currentPath, relativePath = "") => {
+    const entries = fs.readdirSync(currentPath);
 
-    for (const item of items) {
-      const itemPath = path.join(currentPath, item);
-      const itemRelativePath = path.join(relativePath, item);
+    for (const entry of entries) {
+      // Ignora la carpeta de pósters generados por videoProcessingService
+      if (entry === videoProcessingService.POSTER_DIR_NAME) continue;
+
+      const itemPath = path.join(currentPath, entry);
+      const itemRelativePath = path.join(relativePath, entry);
       const stats = fs.statSync(itemPath);
 
       if (stats.isDirectory()) {
-        await readDirectory(itemPath, itemRelativePath);
-      } else if (stats.isFile() && item.endsWith(".mp4")) {
+        readDirectory(itemPath, itemRelativePath);
+      } else if (stats.isFile() && entry.endsWith(".mp4")) {
         // Obtenemos el nombre de la carpeta (categoría)
         const parts = itemRelativePath.split(path.sep);
         const carpeta = parts.length > 1 ? parts[0] : "Sin Categoría";
-        const url = `/videos/${itemRelativePath.replace(/\\/g, "/")}`; // URL para el frontend
-
-        // Agregamos una función que devuelve una promesa (lectura de metadatos) al array
-        promises.push(
-          (async () => {
-            let titulo = item.replace(".mp4", "");
-            let artista = "Desconocido";
-            let año = null;
-            let genero = "Desconocido";
-            let duracion_segundos = 0;
-
-            try {
-              // Lectura intensiva de metadatos
-              const metadata = await mm.parseFile(itemPath);
-
-              titulo = metadata.common.title || titulo;
-              artista =
-                metadata.common.artist ||
-                metadata.common.albumartist ||
-                artista;
-              año = metadata.common.year || año;
-              genero =
-                metadata.common.genre && metadata.common.genre.length > 0
-                  ? metadata.common.genre[0]
-                  : genero;
-              if (metadata.format && metadata.format.duration) {
-                duracion_segundos = Math.round(metadata.format.duration);
-              }
-            } catch (metaError) {
-              console.warn(
-                `[WARN] No se pudieron leer metadatos de ${itemRelativePath}:`,
-                metaError.message
-              );
-            }
-
-            // Devolvemos el objeto de video para Promise.all
-            return {
-              nombreArchivo: item,
-              rutaRelativa: itemRelativePath,
-              carpeta: carpeta,
-              titulo: titulo,
-              artista: artista,
-              año: año,
-              genero: genero,
-              duracion_segundos: duracion_segundos,
-              url: url,
-            };
-          })()
-        );
+        items.push({ itemPath, itemRelativePath, carpeta });
       }
     }
   };
 
-  // 1. Inicia la lectura del directorio y acumula las promesas
-  await readDirectory(VIDEO_BASE_DIR);
+  readDirectory(VIDEO_BASE_DIR);
 
-  // 2. Espera a que TODAS las promesas de lectura de metadatos se resuelvan
-  const results = await Promise.all(promises);
+  if (!videoProcessingService.isFfmpegAvailable()) {
+    console.warn(
+      "[videoController] FFmpeg no disponible: se listarán los videos sin póster y sin remux de faststart."
+    );
+  }
 
-  // 3. Devuelve la lista limpia, lista para ser cacheada
+  // Metadatos + póster + faststart por video, con un límite de tareas ffmpeg en paralelo
+  // (evita saturar CPU/disco cuando la librería tiene muchos videos grandes).
+  const results = await videoProcessingService.runWithConcurrencyLimit(
+    items,
+    videoProcessingService.MAX_CONCURRENT_PROCESSING,
+    async ({ itemPath, itemRelativePath, carpeta }) => {
+      const item = path.basename(itemPath);
+      const url = `/videos/${itemRelativePath.replace(/\\/g, "/")}`; // URL para el frontend
+
+      let titulo = item.replace(".mp4", "");
+      let artista = "Desconocido";
+      let año = null;
+      let genero = "Desconocido";
+      let duracion_segundos = 0;
+
+      try {
+        // Lectura intensiva de metadatos
+        const metadata = await mm.parseFile(itemPath);
+
+        titulo = metadata.common.title || titulo;
+        artista =
+          metadata.common.artist || metadata.common.albumartist || artista;
+        año = metadata.common.year || año;
+        genero =
+          metadata.common.genre && metadata.common.genre.length > 0
+            ? metadata.common.genre[0]
+            : genero;
+        if (metadata.format && metadata.format.duration) {
+          duracion_segundos = Math.round(metadata.format.duration);
+        }
+      } catch (metaError) {
+        console.warn(
+          `[WARN] No se pudieron leer metadatos de ${itemRelativePath}:`,
+          metaError.message
+        );
+      }
+
+      const { posterUrl } = await videoProcessingService.processVideo(
+        VIDEO_BASE_DIR,
+        itemPath,
+        itemRelativePath,
+        duracion_segundos
+      );
+
+      return {
+        nombreArchivo: item,
+        rutaRelativa: itemRelativePath,
+        carpeta: carpeta,
+        titulo: titulo,
+        artista: artista,
+        año: año,
+        genero: genero,
+        duracion_segundos: duracion_segundos,
+        url: url,
+        posterUrl: posterUrl,
+      };
+    }
+  );
+
+  // Devuelve la lista limpia, lista para ser cacheada
   return results.filter((r) => r !== null);
 }
 

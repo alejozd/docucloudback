@@ -23,6 +23,9 @@ node_modules/
 # Descargas de audio y su estado persistido (no deben versionarse)
 downloads/
 
+# Caché de estado de procesamiento de video (pósters/faststart), no debe versionarse
+data/
+
 # Editors
 .vscode/
 .idea/
