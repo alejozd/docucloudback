@@ -92,7 +92,7 @@ function isValidYouTubeUrl(url) {
  */
 async function getVideoMetadata(url) {
   return new Promise((resolve, reject) => {
-    const command = `yt-dlp --print title --print duration --print thumbnail --no-download "${url}"`;
+    const command = `yt-dlp --extractor-args "youtube:player_client=tv" --print title --print duration --print thumbnail --no-download "${url}"`;
     
     exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
       if (error) {
@@ -204,6 +204,7 @@ function downloadAudio(url) {
       '-x',                        // Extraer audio
       '--audio-format', 'mp3',     // Convertir a MP3
       '--audio-quality', '0',      // Máxima calidad
+      '--extractor-args', 'youtube:player_client=tv', // Evita el 403 por PO Token requerido en web_safari/android_vr
       '-o', outputTemplate,        // Template de salida
       url                         // URL del video
     ];
@@ -346,6 +347,7 @@ async function startBackgroundDownload(url) {
     '-x',                        // Extraer audio
     '--audio-format', 'mp3',     // Convertir a MP3
     '--audio-quality', '0',      // Máxima calidad
+    '--extractor-args', 'youtube:player_client=tv', // Evita el 403 por PO Token requerido en web_safari/android_vr
     '-o', outputTemplate,        // Template de salida
     url                         // URL del video
   ];
