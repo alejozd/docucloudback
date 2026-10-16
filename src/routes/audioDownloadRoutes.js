@@ -1,7 +1,9 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const audioDownloadController = require('../controllers/audioDownloadController');
 const audioProcessingController = require('../controllers/audioProcessingController');
+const audioAuthController = require('../controllers/audioAuthController');
 const apiKeyAuth = require('../middleware/apiKeyAuth');
 const tempTokenService = require('../services/tempTokenService');
 const fs = require('fs');
@@ -10,6 +12,27 @@ const path = require('path');
 // ============================================================
 // RUTAS PÚBLICAS (SIN apiKeyAuth) - Deben ir PRIMERO
 // ============================================================
+
+// ============================================================
+// SESIÓN DEL MÓDULO (24 horas por dispositivo)
+// ============================================================
+// El frontend ya NO compara la clave: la envía aquí y el servidor responde
+// con un token firmado que el dispositivo guarda por 24 horas.
+// Límite estricto de intentos para evitar fuerza bruta sobre la clave.
+const sessionRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    ok: false,
+    error: 'Demasiados intentos de acceso. Espera 15 minutos e intenta de nuevo.',
+  },
+});
+
+router.post('/session', sessionRateLimiter, audioAuthController.createSession);
+router.get('/session', audioAuthController.getSession);
 
 // Endpoint de streaming con token temporal
 router.get('/stream/:filename', (req, res) => {
@@ -93,7 +116,7 @@ router.get('/test', (req, res) => {
     message: 'Servidor funcionando correctamente',
     timestamp: new Date().toISOString(),
     routes: {
-      public: ['/stream/:filename', '/generate-token', '/test'],
+      public: ['/session', '/stream/:filename', '/generate-token', '/test'],
       protected: ['/download', '/status/:filename', '/files', '/download/:filename', '/delete/:filename']
     }
   });
