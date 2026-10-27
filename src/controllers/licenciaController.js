@@ -1,3 +1,4 @@
+const { normalizarNit } = require("../utils/nit");
 const {
   activarLicencia,
   validarLicencia,
@@ -15,7 +16,7 @@ const activar = async (req, res) => {
     let { nit, instalacion_hash, app } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas
@@ -57,7 +58,7 @@ const validar = async (req, res) => {
     let { nit, instalacion_hash, app } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas
@@ -117,7 +118,7 @@ const generarOffline = async (req, res) => {
     let { nit, instalacion_hash, dias } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
 
     // Validaciones básicas
     if (!nit || !instalacion_hash || !dias) {
@@ -152,7 +153,7 @@ const crear = async (req, res) => {
     let { nit, app, dias_demo } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas
@@ -198,7 +199,7 @@ const registrar = async (req, res) => {
     let { nit, instalacion_hash, codigo } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
 
     if (!nit || !instalacion_hash || !codigo) {
       return res.status(400).json({
@@ -229,7 +230,7 @@ const generarCodigo = async (req, res) => {
     let { nit, app, instalacion_hash, dias } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     if (!nit || !app || !instalacion_hash || !dias) {
@@ -263,7 +264,7 @@ const activarEnLinea = async (req, res) => {
     let { nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, version_app } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas
@@ -305,7 +306,7 @@ const convertir = async (req, res) => {
     let { nit, app, tipo_licencia, dias_licencia, instalacion_hash } = req.body;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas

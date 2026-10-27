@@ -385,6 +385,20 @@ describe("Licencia Service", () => {
     });
   });
 
+  describe("normalización de NIT", () => {
+    it("debe buscar '900123456' cuando llega '900.123.456-7'", async () => {
+      mockLicenciaModel.findOne.mockResolvedValue(null);
+
+      await expect(
+        licenciaService.activarLicencia("900.123.456-7", "hash-1", "mi-app")
+      ).rejects.toThrow("no_autorizado");
+
+      expect(mockLicenciaModel.findOne).toHaveBeenCalledWith({
+        where: { nit: "900123456", app: "mi-app" },
+      });
+    });
+  });
+
   describe("calcularDiasRestantes", () => {
     it("debe calcular días restantes correctamente", () => {
       const fechaExpiracion = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // 10 días
