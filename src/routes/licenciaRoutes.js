@@ -1,3 +1,4 @@
+const { normalizarNit } = require("../utils/nit");
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const {
@@ -97,7 +98,7 @@ router.get("/licencia/estado", licenciaPublicLimiter, async (req, res) => {
     let { nit, app, instalacion_hash, version_app } = req.query;
 
     // Normalizar inputs
-    if (nit) nit = String(nit).trim();
+    nit = normalizarNit(nit);
     if (app) app = String(app).trim();
 
     // Validaciones básicas

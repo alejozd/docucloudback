@@ -1,3 +1,4 @@
+const { normalizarNit } = require("../utils/nit");
 const crypto = require("crypto");
 const { Licencia } = require("../models");
 
@@ -88,7 +89,7 @@ const buscarOAdoptarLicencia = async (nit, app) => {
 // Activar licencia (solo si ya existe registrada)
 const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
@@ -210,7 +211,7 @@ const activarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 // Validar licencia (uso normal) - con auto-creación de licencias demo
 const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_app) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
@@ -297,7 +298,7 @@ const validarLicencia = async (nit, instalacion_hash, app, ultima_ip, version_ap
 // Generar licencia offline firmada
 const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     const SECRET_KEY = process.env.LICENCIA_SECRET_KEY || "default-secret-key";
 
     // Construir objeto
@@ -328,7 +329,7 @@ const generarLicenciaOffline = async (nit, instalacion_hash, dias) => {
 // Crear licencia (solo admin) - SIN instalacion_hash aún
 const crearLicencia = async (nit, app, dias_demo = 15, ultima_ip) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
@@ -367,7 +368,7 @@ const crearLicencia = async (nit, app, dias_demo = 15, ultima_ip) => {
 // Registrar licencia con código firmado HMAC SHA256
 const registrarLicencia = async (nit, instalacion_hash, codigo, ultima_ip) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     // Separar payload y firma
     const partes = codigo.split(".");
     if (partes.length !== 2) {
@@ -433,7 +434,7 @@ const registrarLicencia = async (nit, instalacion_hash, codigo, ultima_ip) => {
 // Generar código de licencia firmado con HMAC SHA256
 const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     const SECRET = getSecret();
 
@@ -481,7 +482,7 @@ const generarCodigoLicencia = async (nit, app, instalacion_hash, dias) => {
 // Ahora maneja todo el flujo: crea licencia si no existe, aplica tipo_licencia, dias_demo, dias_licencia
 const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_demo, dias_licencia, ultima_ip, version_app) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
@@ -612,7 +613,7 @@ const activarOnline = async (nit, app, instalacion_hash, tipo_licencia, dias_dem
 // Convertir licencia demo a real (anual o permanente)
 const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instalacion_hash, ultima_ip) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
@@ -703,7 +704,7 @@ const convertirLicencia = async (nit, app, tipo_licencia, dias_licencia, instala
 // Obtener estado de la licencia
 const obtenerEstado = async (nit, app, instalacion_hash, ultima_ip, version_app) => {
   try {
-    nit = normalizarInput(nit);
+    nit = normalizarNit(nit);
     app = normalizarInput(app);
     validarApp(app);
 
