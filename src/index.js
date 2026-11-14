@@ -49,6 +49,7 @@ const phraseRoutes = require("./routes/phraseRoutes");
 const segmentoRoutes = require("./routes/segmentoRoutes");
 const authRoutes = require("./routes/authRoutes");
 const reporteRoutes = require("./routes/reporteRoutes");
+const erpRoutes = require("./routes/erpRoutes");
 const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
@@ -130,6 +131,7 @@ app.use("/api/video", videoRoutes);
 // Pasar modelos a rutas que lo necesitan
 app.use("/api", authRoutes);
 app.use("/api", reporteRoutes);
+app.use("/api", erpRoutes);
 app.use(
   "/api/registro-solicitudes",
   registroSolicitudRoutes({ RegistroSolicitud, Autorizacion })
