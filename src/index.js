@@ -53,7 +53,6 @@ const erpRoutes = require("./routes/erpRoutes");
 const autorizacionRoutes = require("./routes/autorizacionRoutes");
 const registroSolicitudRoutes = require("./routes/registroSolicitudRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
-const grabacionRoutes = require("./routes/grabacionRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const tomaTensionSyncRoutes = require("./routes/tomaTensionSyncRoutes");
 const pacienteRoutes = require("./routes/pacienteRoutes");
@@ -122,9 +121,6 @@ app.use("/api", testRoutes);
 app.use("/api", phraseRoutes);
 app.use("/api", segmentoRoutes);
 app.use("/api", batteryRoutes);
-app.use("/api/grabacion", grabacionRoutes);
-// Ruta para servir las grabaciones como archivos estáticos
-app.use("/grabaciones", express.static("/var/www/radio_grabaciones"));
 // Ruta para servir los videos
 app.use("/api/video", videoRoutes);
 
