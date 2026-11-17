@@ -22,6 +22,57 @@ scp -i .deploy-key\docucloud_ed25519 archivo.sh alejo@100.87.12.1:/tmp/     # ps
   `100.87.12.1:3306`, y los puertos de las apps). Lo que **no** funciona fuera de la LAN es el
   escritorio `alejo-r5` (`192.168.1.6`), salvo que ese equipo también entre a Tailscale.
 
+### Añadir otro equipo (una llave por equipo)
+
+Cada equipo lleva **su propia** llave. No se copia la de otro: así se puede revocar un equipo
+(borrando su línea) sin dejar fuera a los demás.
+
+En el equipo nuevo (Windows con OpenSSH, viene de serie):
+
+```powershell
+# 1. Crear la llave. El comentario sirve para identificarla en el servidor.
+ssh-keygen -t ed25519 -C "alejo-r5" -f $env:USERPROFILE\.ssh\docucloud
+
+# 2. Mostrar la llave PUBLICA: esto es lo unico que se copia.
+Get-Content $env:USERPROFILE\.ssh\docucloud.pub
+```
+
+Esa línea (`ssh-ed25519 AAAA... alejo-r5`) se autoriza en el servidor:
+
+```bash
+echo 'ssh-ed25519 AAAA... alejo-r5' >> ~/.ssh/authorized_keys
+```
+
+Se puede hacer desde una sesión ya abierta en otro equipo; si no hay ninguna, la consola del
+proveedor es la única vía, porque la contraseña está desactivada.
+
+Comprobar desde el equipo nuevo:
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\docucloud alejo@192.168.1.50
+```
+
+Opcional: dejarlo cómodo en `%USERPROFILE%\.ssh\config` para escribir solo `ssh docucloud`:
+
+```
+Host docucloud
+    HostName 192.168.1.50
+    User alejo
+    IdentityFile ~/.ssh/docucloud
+```
+
+En la LAN, `192.168.1.50`; fuera de casa, `100.87.12.1` (o instalar Tailscale en ese equipo y
+usar esa misma IP). La primera vez aparecerá la huella del servidor:
+`SHA256:hfC5jj2hnLODRlR5un9HOtyfjAJRyDTZpbE9dMY0gHA`.
+
+**Si el equipo usa PuTTY**, necesita el formato `.ppk`: o se copia un `.ppk` existente (misma
+identidad, con su passphrase) o se convierte la llave nueva con PuTTYgen (`Load` → cambiar el
+filtro a `All Files (*.*)` → `Save private key`), guardándola con **otro nombre**, nunca encima
+de la llave OpenSSH.
+
+**Revocar un equipo**: borrar su línea de `~/.ssh/authorized_keys` (`grep -n` para localizarla
+por el comentario). No afecta a las demás.
+
 ## 2. Regla de oro
 
 | Qué | Con qué usuario |
