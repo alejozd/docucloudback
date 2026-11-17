@@ -10,6 +10,13 @@ ssh alejo@100.87.12.1           # desde fuera, vía Tailscale
 - Usuario SSH: **alejo** (es el único usuario con sudo; root solo entra con llave, sin contraseña).
 - **Todo lo demás se hace con `sudo`**: los repos y los `.env` son de root o `640 root:apps`,
   así que sin sudo no puedes leer los `.env` ni escribir en los proyectos.
+- **Huella SSH (ed25519), idéntica por LAN y por Tailscale**:
+  `SHA256:hfC5jj2hnLODRlR5un9HOtyfjAJRyDTZpbE9dMY0gHA`.
+  Con `plink`/`pscp` conviene fijarla para no aceptar un host nuevo a ciegas:
+  `plink -hostkey SHA256:hfC5... alejo@100.87.12.1`.
+- Si estás **fuera de casa**, Tailscale da acceso completo al servidor (SSH, MySQL en
+  `100.87.12.1:3306`, y los puertos de las apps). Lo que **no** funciona fuera de la LAN es el
+  escritorio `alejo-r5` (`192.168.1.6`), salvo que ese equipo también entre a Tailscale.
 
 ## 2. Regla de oro
 
