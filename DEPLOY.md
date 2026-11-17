@@ -2,18 +2,22 @@
 
 ## 1. Cómo entrar
 
-```bash
-ssh alejo@192.168.1.50          # desde tu LAN
-ssh alejo@100.87.12.1           # desde fuera, vía Tailscale
+**SSH es solo con llave** (desde el 2026-11-17 la contraseña está desactivada:
+`/etc/ssh/sshd_config.d/99-solo-llave.conf`). La contraseña de `alejo` sigue valiendo
+**solo para `sudo`**, no para entrar.
+
+```powershell
+# Windows (OpenSSH), desde el repo de trabajo
+ssh -i .deploy-key\docucloud_ed25519 -o UserKnownHostsFile=.deploy-key\known_hosts alejo@100.87.12.1
+scp -i .deploy-key\docucloud_ed25519 archivo.sh alejo@100.87.12.1:/tmp/     # pscp ya NO sirve
 ```
 
-- Usuario SSH: **alejo** (es el único usuario con sudo; root solo entra con llave, sin contraseña).
+- Direcciones: `192.168.1.50` (LAN), **`100.87.12.1`** (Tailscale, para cuando estás fuera).
+- En **PuTTY** hace falta la llave en formato `.ppk` (se guarda aparte, nunca encima de la
+  OpenSSH): `Connection → SSH → Auth → Credentials → Private key file`. Huella esperada:
+  `SHA256:hfC5jj2hnLODRlR5un9HOtyfjAJRyDTZpbE9dMY0gHA`.
 - **Todo lo demás se hace con `sudo`**: los repos y los `.env` son de root o `640 root:apps`,
   así que sin sudo no puedes leer los `.env` ni escribir en los proyectos.
-- **Huella SSH (ed25519), idéntica por LAN y por Tailscale**:
-  `SHA256:hfC5jj2hnLODRlR5un9HOtyfjAJRyDTZpbE9dMY0gHA`.
-  Con `plink`/`pscp` conviene fijarla para no aceptar un host nuevo a ciegas:
-  `plink -hostkey SHA256:hfC5... alejo@100.87.12.1`.
 - Si estás **fuera de casa**, Tailscale da acceso completo al servidor (SSH, MySQL en
   `100.87.12.1:3306`, y los puertos de las apps). Lo que **no** funciona fuera de la LAN es el
   escritorio `alejo-r5` (`192.168.1.6`), salvo que ese equipo también entre a Tailscale.
@@ -57,21 +61,39 @@ administra desde el **panel de Cloudflare Zero Trust**. `/etc/cloudflared/config
 | app.zdevs.uk | Apache :80 (vhost app.zdevs.uk) → PM2 :3000 | docucloud (frontend) |
 | api.zdevs.uk | PM2 :3100 | docucloud (backend) |
 | pearlbyyou.zdevs.uk | Apache :80 (vhost pearlbyyou.conf) + `/uploads` → :3003 | tienda Pearl |
-| exogena.zdevs.uk | Apache :80 | exógena (frontend) |
+| exogena.zdevs.uk | Apache :80 (:3008) | exógena (frontend) |
+| exogena-api.zdevs.uk | PM2 :3421 | exógena (API) |
 | conteosapp.zdevs.uk | Apache :3006 | conteos (frontend) |
 | conteosapi.zdevs.uk | PM2 :3411 | conteos (API) |
 | torqueflow.zdevs.uk | PM2 :3025 | torqueflow |
 | custodiastock.zdevs.uk | Docker (:8081) | custodiastock |
-| usuarios.zdevs.uk | PM2 :3200 | usuarios |
-| unitask-sync.zdevs.uk | PM2 :8787 | unitask |
-| ssh.zdevs.uk | ssh :22 | acceso SSH |
+| custodiastock-api.zdevs.uk | Docker (:3001) | custodiastock (API) |
+| unitask-sync.zdevs.uk | PM2 :8787 — **nada escuchando, da 502** | unidad de tareas |
+| ssh.zdevs.uk | `ssh://localhost:22` (TCP) | acceso SSH |
+| db.zdevs.uk | `tcp://localhost:3306` (TCP) | MySQL |
+
+Los dos TCP (`ssh` y `db`) **no están abiertos a Internet**: Cloudflare no publica TCP crudo,
+hacen falta el cliente `cloudflared access` y una política de Zero Trust. Comprobado: los
+puertos 22 y 3306 están cerrados desde fuera.
+
+La lista de arriba sale del propio túnel, no de este documento (que se queda viejo). Para
+verla al día:
+
+```bash
+curl -s http://127.0.0.1:20241/config | python3 -c \
+  'import json,sys; [print(r.get("hostname"), "->", r["service"]) for r in json.load(sys.stdin)["config"]["ingress"]]'
+```
 
 Ojo con la ortografía: el host real de la tienda es **`pearlbyyou.zdevs.uk`** (con
-"you"), igual que la carpeta `/var/www/pearlbyyou`. `pearlbyou.zdevs.uk` y
-`pearl.zdevs.uk` **no existen** (sin registro DNS): no los uses en configuraciones.
+"you", 19 caracteres), igual que la carpeta `/var/www/pearlbyyou`. La variante con una
+sola "y" **no existe** (sin registro DNS): no la uses en configuraciones. Es un nombre
+que se confunde al escribirlo de memoria; si hay dudas, comparar con la lista del túnel
+de arriba o contar los caracteres, no mirarlo a ojo.
 
-Hostnames que ya no tienen servicio detrás y conviene borrar del panel para no
-confundir: `pearl.zdevs.uk`, `vecinos.zdevs.uk`, `vecinosapi.zdevs.uk`.
+Hostnames sin servicio detrás que conviene borrar del panel para no confundir:
+`unitask-sync.zdevs.uk` (publicado pero sin backend), `pearl.zdevs.uk`,
+`vecinos.zdevs.uk`, `vecinosapi.zdevs.uk`. `usuarios.zdevs.uk` no existe (ni DNS ni
+ingress): si aparece en alguna lista vieja, está mal.
 
 Comprobación rápida desde el propio servidor (pasa por Cloudflare):
 
@@ -84,6 +106,25 @@ curl -s -o /dev/null -w "%{http_code}\n" https://app.zdevs.uk/
 
 ### docucloud — frontend
 ```bash
+sudo bash /var/www/docucloudfront/scripts/deploy_frontend.sh
+```
+
+El script hace `git pull`, `npm install`, `npm run build` y reinicia el PM2 `frontend`.
+Si se queja de cambios locales: `sudo git -C /var/www/docucloudfront checkout -- package-lock.json`.
+
+### Si no puedes hacer `push` a GitHub (p. ej. sin credenciales en ese equipo)
+
+`deploy_frontend.sh` empieza con `git pull`, así que los commits tienen que estar en el
+repo del servidor. Sin push, se llevan con un paquete de git:
+
+```bash
+# en el PC, con el commit que ya tiene el servidor como base
+git bundle create front.bundle <commit-del-servidor>..main
+scp -i .deploy-key/docucloud_ed25519 front.bundle alejo@100.87.12.1:/tmp/
+
+# en el servidor
+sudo git -C /var/www/docucloudfront fetch /tmp/front.bundle 'main:refs/heads/entrante'
+sudo git -C /var/www/docucloudfront merge --ff-only entrante
 sudo bash /var/www/docucloudfront/scripts/deploy_frontend.sh
 ```
 
@@ -199,6 +240,16 @@ Una restauración de prueba de `torqueflowdb` ya se validó (6 tablas, mismos re
 - disco ≥ 85 %
 - memoria disponible < 300 MB
 - carga del sistema > 4 × núcleos (solo pasados 5 min del arranque)
+- **HTTPS de todo lo que publica el túnel** (añadido el 2026-11-17): lee la lista de
+  hostnames `http`/`https` de `http://127.0.0.1:20241/config` y pide cada uno; un `5xx`
+  o una respuesta vacía (tras un reintento) es problema. Así se detecta lo que el
+  chequeo de puertos no ve: túnel caído, DNS roto o vhost mal puesto.
+  Los servicios `tcp://` (ssh, db) se ignoran porque no se pueden pedir por curl.
+  Los hostnames publicados por error están en `DOMINIOS_EXCLUIR` (ahora
+  `unitask-sync`, que no tiene backend detrás).
+- **caducidad del certificado**: una vez por hora, avisa si quedan menos de 21 días.
+
+Una ejecución tarda ~5 s (lo que tardan los HTTPS).
 
 Si algo falla, envía un mensaje por **Telegram**. Solo avisa cuando cambia el estado
 o cada 6 h si el problema persiste, y manda un "normalizado" al recuperarse.
@@ -212,4 +263,5 @@ sudo /usr/local/bin/docucloud-healthcheck.sh; echo $?   # 0 = todo bien, 1 = pro
 cat /var/lib/docucloud-health.state                     # ultimo estado notificado
 tail -20 /var/log/docucloud-healthcheck.log
 sudo cat /root/.telegram-notify.cnf                     # token y chat del bot
+ls -l /usr/local/bin/docucloud-healthcheck.sh.bak-*     # version anterior del script
 ```
