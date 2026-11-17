@@ -39,6 +39,40 @@ El PM2 de root está deshabilitado; el de `alejo` es independiente.
 
 Ramas: docucloud (main), conteos-frontend (**master**), el resto (main).
 
+## 3.1 Dominios públicos (Cloudflare)
+
+El túnel corre **con `--token`**: su configuración de hostnames (Public Hostnames) se
+administra desde el **panel de Cloudflare Zero Trust**. `/etc/cloudflared/config.yml`
+**no se usa** (quedó marcado como OBSOLETO); editarlo no cambia nada.
+
+| Dominio | Llega a | Sirve |
+|---|---|---|
+| app.zdevs.uk | Apache :80 (vhost app.zdevs.uk) → PM2 :3000 | docucloud (frontend) |
+| api.zdevs.uk | PM2 :3100 | docucloud (backend) |
+| pearlbyyou.zdevs.uk | Apache :80 (vhost pearlbyyou.conf) + `/uploads` → :3003 | tienda Pearl |
+| exogena.zdevs.uk | Apache :80 | exógena (frontend) |
+| conteosapp.zdevs.uk | Apache :3006 | conteos (frontend) |
+| conteosapi.zdevs.uk | PM2 :3411 | conteos (API) |
+| torqueflow.zdevs.uk | PM2 :3025 | torqueflow |
+| custodiastock.zdevs.uk | Docker (:8081) | custodiastock |
+| usuarios.zdevs.uk | PM2 :3200 | usuarios |
+| unitask-sync.zdevs.uk | PM2 :8787 | unitask |
+| ssh.zdevs.uk | ssh :22 | acceso SSH |
+
+Ojo con la ortografía: el host real de la tienda es **`pearlbyyou.zdevs.uk`** (con
+"you"), igual que la carpeta `/var/www/pearlbyyou`. `pearlbyou.zdevs.uk` y
+`pearl.zdevs.uk` **no existen** (sin registro DNS): no los uses en configuraciones.
+
+Hostnames que ya no tienen servicio detrás y conviene borrar del panel para no
+confundir: `pearl.zdevs.uk`, `vecinos.zdevs.uk`, `vecinosapi.zdevs.uk`.
+
+Comprobación rápida desde el propio servidor (pasa por Cloudflare):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://pearlbyyou.zdevs.uk/
+curl -s -o /dev/null -w "%{http_code}\n" https://app.zdevs.uk/
+```
+
 ## 4. Recetas
 
 ### docucloud — frontend
