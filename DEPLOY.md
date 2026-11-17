@@ -47,6 +47,7 @@ El PM2 de root está deshabilitado; el de `alejo` es independiente.
 | exogena-frontend | 3008 | Apache (build) | /var/www/exogena/exogena-frontend |
 | pearlbyyou-frontend | 80 | Apache (build) | /var/www/pearlbyyou/frontend |
 | custodiastock | 3001 / 8081 | Docker Compose | /var/www/custodiastock |
+| unitask-sync-api | 8787 | PM2 | /var/www/unitask-sync |
 
 Ramas: docucloud (main), conteos-frontend (**master**), el resto (main).
 
@@ -68,7 +69,7 @@ administra desde el **panel de Cloudflare Zero Trust**. `/etc/cloudflared/config
 | torqueflow.zdevs.uk | PM2 :3025 | torqueflow |
 | custodiastock.zdevs.uk | Docker (:8081) | custodiastock |
 | custodiastock-api.zdevs.uk | Docker (:3001) | custodiastock (API) |
-| unitask-sync.zdevs.uk | PM2 :8787 — **nada escuchando, da 502** | unidad de tareas |
+| unitask-sync.zdevs.uk | PM2 :8787 | UniTask Sync (API de la app) |
 | ssh.zdevs.uk | `ssh://localhost:22` (TCP) | acceso SSH |
 | db.zdevs.uk | `tcp://localhost:3306` (TCP) | MySQL |
 
@@ -90,20 +91,32 @@ sola "y" **no existe** (sin registro DNS): no la uses en configuraciones. Es un 
 que se confunde al escribirlo de memoria; si hay dudas, comparar con la lista del túnel
 de arriba o contar los caracteres, no mirarlo a ojo.
 
-Hostnames publicados sin servicio detrás:
-
-- **`unitask-sync.zdevs.uk`** está en el túnel pero su API **no está corriendo** (da 502).
-  Es un backend Fastify + PostgreSQL (puerto 8787) cuyo código vive en
-  `/home/alejo/unitask-sync-server`; la base `unitask_sync` **sí existe** en PostgreSQL y se
-  respalda a diario, pero el proceso nunca se dio de alta en el PM2 de `apps`. Para que
-  funcione hay que moverlo a `/var/www`, dárselo al usuario `apps` y arrancarlo con PM2.
-  Mientras tanto, está en `DOMINIOS_EXCLUIR` del healthcheck para no avisar en falso.
-  Decisión pendiente: desplegarlo o borrar el hostname del panel.
+Hostnames publicados sin servicio detrás: **ninguno** (el 2026-11-17 se desplegó
+`unitask-sync`, que hasta entonces daba 502).
 
 Ya **no existen** `vecinos.zdevs.uk` ni `vecinosapi.zdevs.uk` (dominios, vhosts, bases y
 backups borrados el 2026-11-17) ni `pearl.zdevs.uk`. Si aparecen en listas antiguas, están
 obsoletos. `usuarios.zdevs.uk` tampoco existe (ni DNS ni ingress): si figura en alguna
 configuración, es un error.
+
+### unitask-sync (API de UniTask)
+
+Backend Fastify + PostgreSQL (`unitask_sync`, usuario `usync`) que sincroniza la app
+UniTask. Corre en el PM2 de `apps` como **`unitask-sync-api`** (límite 300 MB) desde
+`/var/www/unitask-sync`.
+
+- Código: el original de desarrollo está en `/home/alejo/unitask-sync-server`; la copia que
+  corre es `/var/www/unitask-sync` (dueño `apps`, `.env` en `640 root:apps`).
+- `dist/` ya viene compilado. Si se toca el código, hay que recompilar y reiniciar:
+  ```bash
+  cd /var/www/unitask-sync
+  sudo npm run build          # tsc -p tsconfig.json
+  sudo pm2apps restart unitask-sync-api
+  ```
+- El `.env` fija `ATTACHMENTS_DIR=/var/www/unitask-sync/data/attachments` (los adjuntos van
+  a disco, no a la base).
+- Comprobación: `curl -s localhost:8787/health` → `{"status":"ok"}`.
+- La base se respalda a diario con el resto de PostgreSQL (`/var/backups/postgres/unitask_sync-*.dump`).
 
 Comprobación rápida desde el propio servidor (pasa por Cloudflare):
 
@@ -211,6 +224,7 @@ Límites actuales (si una app los supera, PM2 la reinicia sola):
 | frontend | 300 MB |
 | docuback | 500 MB |
 | torqueflow | 700 MB |
+| unitask-sync-api | 300 MB |
 
 ## 8. Backups automáticos
 
@@ -244,7 +258,7 @@ Una restauración de prueba de `torqueflowdb` ya se validó (6 tablas, mismos re
 `/usr/local/bin/docucloud-healthcheck.sh` corre **cada 5 minutos** (cron
 `/etc/cron.d/docucloud-healthcheck`) y revisa:
 
-- **puertos**: `3000 3003 3100 3411 3421 3025` (apps) + `3001 8081` (custodiastock)
+- **puertos**: `3000 3003 3100 3411 3421 3025 8787` (apps) + `3001 8081` (custodiastock)
 - **servicios**: `apache2`, `mysql`, `cloudflared`, `docker`
 - **frescura de backups**: si el último dump de MySQL o PostgreSQL tiene más de 36 h
 - disco ≥ 85 %
