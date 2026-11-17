@@ -90,10 +90,20 @@ sola "y" **no existe** (sin registro DNS): no la uses en configuraciones. Es un 
 que se confunde al escribirlo de memoria; si hay dudas, comparar con la lista del túnel
 de arriba o contar los caracteres, no mirarlo a ojo.
 
-Hostnames sin servicio detrás que conviene borrar del panel para no confundir:
-`unitask-sync.zdevs.uk` (publicado pero sin backend), `pearl.zdevs.uk`,
-`vecinos.zdevs.uk`, `vecinosapi.zdevs.uk`. `usuarios.zdevs.uk` no existe (ni DNS ni
-ingress): si aparece en alguna lista vieja, está mal.
+Hostnames publicados sin servicio detrás:
+
+- **`unitask-sync.zdevs.uk`** está en el túnel pero su API **no está corriendo** (da 502).
+  Es un backend Fastify + PostgreSQL (puerto 8787) cuyo código vive en
+  `/home/alejo/unitask-sync-server`; la base `unitask_sync` **sí existe** en PostgreSQL y se
+  respalda a diario, pero el proceso nunca se dio de alta en el PM2 de `apps`. Para que
+  funcione hay que moverlo a `/var/www`, dárselo al usuario `apps` y arrancarlo con PM2.
+  Mientras tanto, está en `DOMINIOS_EXCLUIR` del healthcheck para no avisar en falso.
+  Decisión pendiente: desplegarlo o borrar el hostname del panel.
+
+Ya **no existen** `vecinos.zdevs.uk` ni `vecinosapi.zdevs.uk` (dominios, vhosts, bases y
+backups borrados el 2026-11-17) ni `pearl.zdevs.uk`. Si aparecen en listas antiguas, están
+obsoletos. `usuarios.zdevs.uk` tampoco existe (ni DNS ni ingress): si figura en alguna
+configuración, es un error.
 
 Comprobación rápida desde el propio servidor (pasa por Cloudflare):
 
