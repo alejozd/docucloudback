@@ -65,10 +65,23 @@ En la LAN, `192.168.1.50`; fuera de casa, `100.87.12.1` (o instalar Tailscale en
 usar esa misma IP). La primera vez aparecerá la huella del servidor:
 `SHA256:hfC5jj2hnLODRlR5un9HOtyfjAJRyDTZpbE9dMY0gHA`.
 
-**Si el equipo usa PuTTY**, necesita el formato `.ppk`: o se copia un `.ppk` existente (misma
-identidad, con su passphrase) o se convierte la llave nueva con PuTTYgen (`Load` → cambiar el
-filtro a `All Files (*.*)` → `Save private key`), guardándola con **otro nombre**, nunca encima
-de la llave OpenSSH.
+**Si el equipo usa PuTTY** hay dos caminos:
+
+1. **Rápido**: copiar un `.ppk` que ya funcione (por ejemplo el del portátil). Ventaja: cero
+   configuración. Inconveniente: los dos equipos comparten identidad, así que no se puede
+   revocar uno sin dejar fuera al otro.
+2. **Recomendado, con PuTTYgen** (no hace falta OpenSSH ni convertir nada):
+
+   1. Abrir **PuTTYgen** en ese equipo → botón **Generate** → mover el ratón hasta que acabe.
+   2. Escribir una **Key passphrase** (recomendado) y, en **Key comment**, algo que identifique
+      el equipo (p. ej. `alejo-r5`): es lo que luego se ve en `authorized_keys`.
+   3. **Save private key** → guardar como `docucloud_alejo-r5.ppk`. Este archivo no se comparte.
+   4. Arriba hay un cuadro titulado **"Public key for pasting into OpenSSH authorized_keys
+      file"**: ese texto (`ssh-ed25519 AAAA... alejo-r5`) es el que se autoriza en el servidor.
+      **Ojo**: `Save public key` guarda un formato distinto (`---- BEGIN SSH2 PUBLIC KEY ----`)
+      que **no** vale para `authorized_keys`; hay que copiar del cuadro de texto.
+   5. Autorizar esa línea igual que antes y, en PuTTY, en
+      `Connection → SSH → Auth → Credentials`, elegir el `.ppk` (y guardar la sesión).
 
 **Revocar un equipo**: borrar su línea de `~/.ssh/authorized_keys` (`grep -n` para localizarla
 por el comentario). No afecta a las demás.
