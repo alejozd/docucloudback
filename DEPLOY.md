@@ -163,6 +163,8 @@ Límites actuales (si una app los supera, PM2 la reinicia sola):
 
 - Logs: `/var/log/docucloud-mysql-backup.log` y `/var/log/docucloud-pg-backup.log`.
 - Crons en `/etc/cron.d/docucloud-mysql-backup` y `/etc/cron.d/docucloud-pg-backup`.
+- **Avisan por Telegram solo si fallan** (wrapper `/usr/local/bin/docucloud-backup-notify.sh`):
+  si el backup sale bien no molesta; si falla llega un `❌ ... El backup X fallo`.
 - MySQL lee credenciales del `.env` del backend; PostgreSQL usa el usuario `postgres` por socket.
 - **Ojo:** los dos guardan en el mismo disco del servidor. Falta una copia fuera
   (pendiente: `rsync` a otro equipo de la LAN o nube).
@@ -184,17 +186,23 @@ Una restauración de prueba de `torqueflowdb` ya se validó (6 tablas, mismos re
 `/usr/local/bin/docucloud-healthcheck.sh` corre **cada 5 minutos** (cron
 `/etc/cron.d/docucloud-healthcheck`) y revisa:
 
-- los 7 puertos de las apps (`3000 3003 3100 3400 3411 3421 3025`)
+- **puertos**: `3000 3003 3100 3411 3421 3025` (apps) + `3001 8081` (custodiastock)
+- **servicios**: `apache2`, `mysql`, `cloudflared`, `docker`
+- **frescura de backups**: si el último dump de MySQL o PostgreSQL tiene más de 36 h
 - disco ≥ 85 %
 - memoria disponible < 300 MB
-- carga del sistema > 3 × núcleos
+- carga del sistema > 4 × núcleos (solo pasados 5 min del arranque)
 
-Si algo falla, envía un mensaje por **Telegram** (usa `TELEGRAM_BOT_TOKEN` y
-`TELEGRAM_CHAT_ID` del `.env` de docuback). Solo avisa cuando cambia el estado o
-cada 6 h si el problema persiste, y manda un mensaje de "normalizado" al recuperarse.
+Si algo falla, envía un mensaje por **Telegram**. Solo avisa cuando cambia el estado
+o cada 6 h si el problema persiste, y manda un "normalizado" al recuperarse.
+
+**Credenciales del bot**: viven en `/root/.telegram-notify.cnf` (600), independiente
+del `.env` de la app; si ese archivo falta, cae al `.env` de docuback. Así el
+monitoreo sigue funcionando aunque se toquen los `.env` de las aplicaciones.
 
 ```bash
 sudo /usr/local/bin/docucloud-healthcheck.sh; echo $?   # 0 = todo bien, 1 = problemas
 cat /var/lib/docucloud-health.state                     # ultimo estado notificado
 tail -20 /var/log/docucloud-healthcheck.log
+sudo cat /root/.telegram-notify.cnf                     # token y chat del bot
 ```
